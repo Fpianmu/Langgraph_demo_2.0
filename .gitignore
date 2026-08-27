@@ -1,1 +1,9 @@
 .env
+__pycache__/
+*.pyc
+agent/test_onboarding.py
+agent/course_resources/
+agent/rag/storage/local_kb/
+web/node_modules/
+web-start.out
+web-start.err
