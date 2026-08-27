@@ -47,6 +47,16 @@ class ProfileRepository:
                 row = conn.execute("SELECT user_id, display_name, background_type FROM users WHERE user_id = ?", (user_id,)).fetchone()
         return dict(row)
 
+    def list_users(self) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT user_id, display_name, background_type, created_at, updated_at
+                FROM users ORDER BY updated_at DESC, created_at DESC, user_id
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def get_metrics(self, user_id: str) -> dict[str, float]:
         with self._connect() as conn:
             row = conn.execute(

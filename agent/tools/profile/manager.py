@@ -128,6 +128,9 @@ class ProfileManager:
             "knowledge_gap_summary": knowledge_gap_sync["summary"],
         }
 
+    def list_users(self) -> list[dict[str, Any]]:
+        return self.repository.list_users()
+
     def record_resource_difficulty(
         self,
         user_id: str,

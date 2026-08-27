@@ -12,7 +12,13 @@ try:
 except ModuleNotFoundError:
     _SseEventSourceResponse = None
 
-from agent.graph import graph
+try:
+    from agent.graph import graph
+except ModuleNotFoundError as exc:
+    graph = None
+    GRAPH_IMPORT_ERROR = exc
+else:
+    GRAPH_IMPORT_ERROR = None
 from agent.api_storage import (
     artifact_manifest_payload,
     artifact_markdown_text,
@@ -33,9 +39,9 @@ from agent.api_storage import (
 )
 from agent.observability.runner import stream_graph_agent_events
 from agent.observability.sse import format_sse_event
+from agent.onboarding_api import register_onboarding_routes
 from agent.storage_layout import resolve_storage_root
 from agent.tools.profile_tools import apply_profile_update_suggestions
-from agent.tools.cnc_simulation_tools import create_cnc_simulation_submission
 from agent.tools.learning_recommendation_tools import (
     load_learning_recommendations,
     refresh_learning_recommendations,
@@ -61,6 +67,7 @@ class RunRecord:
 
 
 app = FastAPI(title="LangGraph Demo 2.0 Agent Events")
+register_onboarding_routes(app)
 RUNS: dict[str, RunRecord] = {}
 
 
@@ -127,6 +134,8 @@ def stream_run_events(run_id: str) -> Any:
     record = RUNS.get(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="run not found")
+    if graph is None:
+        raise HTTPException(status_code=503, detail=f"graph unavailable: {GRAPH_IMPORT_ERROR}")
 
     async def generate():
         if record.status == "cancelled":
@@ -421,6 +430,8 @@ def get_cnc_simulation_embed_endpoint(
 
 @app.post("/api/simulation/{task_id}/submissions")
 def create_cnc_simulation_submission_endpoint(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    from agent.tools.cnc_simulation_tools import create_cnc_simulation_submission
+
     course_id = str(payload.get("course_id") or "cnc_lathe")
     chapter_id = str(payload.get("chapter_id") or "4.1")
     user_id = str(payload.get("user_id") or "").strip()

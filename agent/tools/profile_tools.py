@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 from agent.tools.profile.manager import ProfileManager
-from agent.tools.course_resource_tools import load_course_manifest, load_learning_path
 
 
 def load_profile_context(
@@ -91,6 +90,8 @@ def register_user_profile(
     storage_root: str | Path | None = None,
     resource_root: str | Path | None = None,
 ) -> dict[str, Any]:
+    from agent.tools.course_resource_tools import load_course_manifest, load_learning_path
+
     manifest = load_course_manifest(course_id, resource_root=resource_root)
     supported_levels = {
         str(item)
