@@ -1,0 +1,43 @@
+{
+  "attempt_id": "attempt_39c350ff1d05",
+  "score": 4.6,
+  "answer_count": 5,
+  "artifact_id": "quiz_2d68dcb97ecd",
+  "user_id": "user_001",
+  "submitted_at": "2026-08-26T15:00:28.651558+00:00",
+  "correct_count": 4,
+  "total_possible": 5.0,
+  "accuracy": 0.8,
+  "answers": [
+    {
+      "item_id": "quiz_q1",
+      "user_answer": "急停和防护状态",
+      "is_correct": true,
+      "score": 1.0
+    },
+    {
+      "item_id": "quiz_q2",
+      "user_answer": "先复位再检查状态",
+      "is_correct": true,
+      "score": 1.0
+    },
+    {
+      "item_id": "quiz_q3",
+      "user_answer": "刀补输入",
+      "is_correct": true,
+      "score": 1.0
+    },
+    {
+      "item_id": "quiz_q4",
+      "user_answer": "刀路和循环逻辑",
+      "is_correct": true,
+      "score": 1.0
+    },
+    {
+      "item_id": "quiz_q5",
+      "user_answer": "建立工件加工基准",
+      "is_correct": false,
+      "score": 0.6
+    }
+  ]
+}

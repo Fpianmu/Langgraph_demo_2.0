@@ -1,0 +1,14 @@
+{
+  "artifact_id": "quiz_2d68dcb97ecd",
+  "user_id": "user_001",
+  "title": "数控安全与编程基础测验",
+  "course_id": "cnc_lathe",
+  "chapter_id": "3.6",
+  "artifact_type": "quiz",
+  "question_scope": "path_generated",
+  "chapter_group": "chapter_03",
+  "source_node": "question_generator",
+  "files": {
+    "questions": "users/user_001/questions/path_generated/chapter_03/3.6/quiz_2d68dcb97ecd/questions.json"
+  }
+}

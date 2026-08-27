@@ -1,0 +1,12 @@
+{
+  "artifact_id": "practice_guide_c2ef651c4c51",
+  "user_id": "user_001",
+  "title": "对刀与程序校验实训指南",
+  "course_id": "cnc_lathe",
+  "chapter_id": "3.2",
+  "artifact_type": "practice_guide",
+  "source_node": "practice_guide_generator",
+  "files": {
+    "markdown": "users/user_001/practice_outputs/practice_guide_c2ef651c4c51/practice.md"
+  }
+}

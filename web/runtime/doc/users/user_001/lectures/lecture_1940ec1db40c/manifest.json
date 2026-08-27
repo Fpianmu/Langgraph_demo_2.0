@@ -1,0 +1,12 @@
+{
+  "artifact_id": "lecture_1940ec1db40c",
+  "user_id": "user_001",
+  "title": "数控车床安全操作复盘讲义",
+  "course_id": "cnc_lathe",
+  "chapter_id": "3.8",
+  "artifact_type": "lecture",
+  "source_node": "lecture_generator",
+  "files": {
+    "markdown": "users/user_001/lectures/lecture_1940ec1db40c/lecture.md"
+  }
+}

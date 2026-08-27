@@ -1,0 +1,90 @@
+{
+  "question_set_id": "quiz_2d68dcb97ecd",
+  "artifact_id": "quiz_2d68dcb97ecd",
+  "user_id": "user_001",
+  "course_id": "cnc_lathe",
+  "chapter_id": "3.6",
+  "title": "数控安全与编程基础测验",
+  "items": [
+    {
+      "id": "quiz_q1",
+      "question_text": "开机前最优先检查的是哪一项？",
+      "type": "single_choice",
+      "options": [
+        "程序号",
+        "急停和防护状态",
+        "刀补表",
+        "主轴转速"
+      ],
+      "correct_answer": "急停和防护状态",
+      "explanation": "开机前必须先确认安全链路正常。",
+      "knowledge_points": [
+        "开机前检查"
+      ],
+      "difficulty": "easy"
+    },
+    {
+      "id": "quiz_q2",
+      "question_text": "机床发生越程后，合理顺序是什么？",
+      "type": "single_choice",
+      "options": [
+        "立即继续加工",
+        "先复位再检查状态",
+        "先换刀再说",
+        "直接修改程序"
+      ],
+      "correct_answer": "先复位再检查状态",
+      "explanation": "越程后先恢复机床状态，再排查原因。",
+      "knowledge_points": [
+        "急停与复位"
+      ],
+      "difficulty": "medium"
+    },
+    {
+      "id": "quiz_q3",
+      "question_text": "对刀流程中哪一步最容易影响后续加工精度？",
+      "type": "single_choice",
+      "options": [
+        "检查机床颜色",
+        "刀补输入",
+        "打开照明",
+        "关闭冷却"
+      ],
+      "correct_answer": "刀补输入",
+      "explanation": "刀补与坐标修正直接决定首件精度。",
+      "knowledge_points": [
+        "对刀流程"
+      ],
+      "difficulty": "medium"
+    },
+    {
+      "id": "quiz_q4",
+      "question_text": "程序校验时最应该关注什么？",
+      "type": "single_choice",
+      "options": [
+        "程序长度",
+        "刀路和循环逻辑",
+        "文件大小",
+        "日期时间"
+      ],
+      "correct_answer": "刀路和循环逻辑",
+      "explanation": "校验重点是避免逻辑错误和刀路干涉。",
+      "knowledge_points": [
+        "程序校验"
+      ],
+      "difficulty": "medium"
+    },
+    {
+      "id": "quiz_q5",
+      "question_text": "简述坐标系设置的目的。",
+      "type": "short_answer",
+      "options": [],
+      "correct_answer": "建立工件加工基准并保证程序与实际位置一致。",
+      "explanation": "该题用于检查理论理解。",
+      "knowledge_points": [
+        "坐标系与机床组成"
+      ],
+      "difficulty": "hard"
+    }
+  ]
+}

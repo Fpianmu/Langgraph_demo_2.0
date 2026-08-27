@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "user_id": "user_001",
+  "updated_at": "2026-08-26T15:00:28.940460+00:00",
+  "assignments": {
+    "cnc_lathe": {
+      "course_id": "cnc_lathe",
+      "learner_level": "standard",
+      "path_id": "standard",
+      "path_version": "2.0",
+      "classification_source": "registration_assessment",
+      "classification_score": 0.86,
+      "classification_reason": "已完成基础安全与机床认知，适合标准路径继续学习。",
+      "manual_override": false,
+      "assigned_at": "2026-08-26 15:00:28",
+      "updated_at": "2026-08-26 15:00:28"
+    }
+  }
+}

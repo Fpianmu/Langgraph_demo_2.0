@@ -1,0 +1,195 @@
+{
+  "status": "success",
+  "user_id": "user_001",
+  "updated_at": "2026-08-26T15:00:28.598044+00:00",
+  "origin": "memory",
+  "primary_topic": "数控加工程序编制与校验",
+  "context_label": "已根据画像和知识漏洞更新推荐，当前优先：数控编程与程序校验。",
+  "recommendations": [
+    {
+      "id": "programming",
+      "title": "数控编程与程序校验",
+      "summary": "建议优先练习程序结构、G/M 指令、刀具补偿、循环指令与程序校验。",
+      "reason": "数控编程能力分数为 54 分，且近期画像/知识漏洞命中：编程、程序、循环指令、程序校验、刀补。",
+      "topic": "数控加工程序编制与校验",
+      "focus": "程序结构、G/M 指令、刀具补偿、循环指令与程序校验",
+      "capability_dimension": "programming",
+      "origin": "memory",
+      "score": 20.9526,
+      "matched_keywords": [
+        "编程",
+        "程序",
+        "循环指令",
+        "程序校验",
+        "刀补"
+      ],
+      "recommended_actions": [
+        "完成 5 道“数控加工程序编制与校验”相关练习题。",
+        "复盘错题中与“程序结构、G/M 指令、刀具补偿、循环指令与程序校验”相关的知识点。"
+      ]
+    },
+    {
+      "id": "operation",
+      "title": "数控车铣基本操作",
+      "summary": "建议优先练习工件装夹、刀具安装、对刀、程序校验、空运行与首件试切。",
+      "reason": "操作加工能力分数为 55 分，且近期画像/知识漏洞命中：操作、对刀、试切、机床。",
+      "topic": "数控车铣加工基本操作",
+      "focus": "工件装夹、刀具安装、对刀、程序校验、空运行与首件试切",
+      "capability_dimension": "machining_operation",
+      "origin": "memory",
+      "score": 17.599,
+      "matched_keywords": [
+        "操作",
+        "对刀",
+        "试切",
+        "机床"
+      ],
+      "recommended_actions": [
+        "完成 5 道“数控车铣加工基本操作”相关练习题。",
+        "复盘错题中与“工件装夹、刀具安装、对刀、程序校验、空运行与首件试切”相关的知识点。"
+      ]
+    },
+    {
+      "id": "safety",
+      "title": "数控机床安全操作",
+      "summary": "建议优先练习开机前检查、个人防护、急停操作、异常报警与规范处置。",
+      "reason": "安全规范能力分数为 55 分，且近期画像/知识漏洞命中：安全、急停。",
+      "topic": "数控机床安全操作",
+      "focus": "开机前检查、个人防护、急停操作、异常报警与规范处置",
+      "capability_dimension": "safety",
+      "origin": "memory",
+      "score": 10.7,
+      "matched_keywords": [
+        "安全",
+        "急停"
+      ],
+      "recommended_actions": [
+        "完成 5 道“数控机床安全操作”相关练习题。",
+        "复盘错题中与“开机前检查、个人防护、急停操作、异常报警与规范处置”相关的知识点。"
+      ]
+    },
+    {
+      "id": "multiaxis",
+      "title": "多轴数控加工",
+      "summary": "建议优先练习旋转轴定义、坐标变换、联动加工、后处理与碰撞检查。",
+      "reason": "先进制造能力分数为 60 分，且近期画像/知识漏洞命中：联动。",
+      "topic": "多轴数控加工基础",
+      "focus": "旋转轴定义、坐标变换、联动加工、后处理与碰撞检查",
+      "capability_dimension": "advanced_manufacturing",
+      "origin": "memory",
+      "score": 6.5182,
+      "matched_keywords": [
+        "联动"
+      ],
+      "recommended_actions": [
+        "完成 5 道“多轴数控加工基础”相关练习题。",
+        "复盘错题中与“旋转轴定义、坐标变换、联动加工、后处理与碰撞检查”相关的知识点。"
+      ]
+    },
+    {
+      "id": "certificate",
+      "title": "职业技能等级考核",
+      "summary": "建议优先练习安全规范、基础理论、程序编制、操作流程与质量检测。",
+      "reason": "工艺规划能力分数为 60 分，且近期画像/知识漏洞命中：复习。",
+      "topic": "数控车铣加工职业技能等级考核",
+      "focus": "安全规范、基础理论、程序编制、操作流程与质量检测",
+      "capability_dimension": "process_planning",
+      "origin": "memory",
+      "score": 6.4172,
+      "matched_keywords": [
+        "复习"
+      ],
+      "recommended_actions": [
+        "完成 5 道“数控车铣加工职业技能等级考核”相关练习题。",
+        "复盘错题中与“安全规范、基础理论、程序编制、操作流程与质量检测”相关的知识点。"
+      ]
+    },
+    {
+      "id": "theory",
+      "title": "数控加工基础理论",
+      "summary": "建议优先练习机床坐标系、工件坐标系、刀具补偿、切削参数与尺寸精度。",
+      "reason": "基础识图能力分数为 76 分。",
+      "topic": "数控加工基础理论",
+      "focus": "机床坐标系、工件坐标系、刀具补偿、切削参数与尺寸精度",
+      "capability_dimension": "foundations",
+      "origin": "profile",
+      "score": 2.3313,
+      "matched_keywords": [],
+      "recommended_actions": [
+        "完成 5 道“数控加工基础理论”相关练习题。",
+        "复盘错题中与“机床坐标系、工件坐标系、刀具补偿、切削参数与尺寸精度”相关的知识点。"
+      ]
+    }
+  ],
+  "trace": {
+    "source": "profile_context",
+    "ranked_tracks": [
+      {
+        "id": "programming",
+        "rank": 20.9526,
+        "capability_dimension": "programming",
+        "score": 54.0,
+        "memory_hits": 5,
+        "matched_keywords": [
+          "编程",
+          "程序",
+          "循环指令",
+          "程序校验",
+          "刀补"
+        ]
+      },
+      {
+        "id": "operation",
+        "rank": 17.599,
+        "capability_dimension": "machining_operation",
+        "score": 55.0,
+        "memory_hits": 4,
+        "matched_keywords": [
+          "操作",
+          "对刀",
+          "试切",
+          "机床"
+        ]
+      },
+      {
+        "id": "safety",
+        "rank": 10.7,
+        "capability_dimension": "safety",
+        "score": 55.0,
+        "memory_hits": 2,
+        "matched_keywords": [
+          "安全",
+          "急停"
+        ]
+      },
+      {
+        "id": "multiaxis",
+        "rank": 6.5182,
+        "capability_dimension": "advanced_manufacturing",
+        "score": 60.0,
+        "memory_hits": 1,
+        "matched_keywords": [
+          "联动"
+        ]
+      },
+      {
+        "id": "certificate",
+        "rank": 6.4172,
+        "capability_dimension": "process_planning",
+        "score": 60.0,
+        "memory_hits": 1,
+        "matched_keywords": [
+          "复习"
+        ]
+      },
+      {
+        "id": "theory",
+        "rank": 2.3313,
+        "capability_dimension": "foundations",
+        "score": 76.0,
+        "memory_hits": 0,
+        "matched_keywords": []
+      }
+    ]
+  }
+}

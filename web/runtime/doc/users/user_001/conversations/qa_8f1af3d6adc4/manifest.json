@@ -1,0 +1,11 @@
+{
+  "session_id": "qa_8f1af3d6adc4",
+  "user_id": "user_001",
+  "course_id": "cnc_lathe",
+  "title": "数控车床学习问答",
+  "artifact_type": "qa_session",
+  "files": {
+    "messages": "messages.jsonl",
+    "transcript": "transcript.md"
+  }
+}
