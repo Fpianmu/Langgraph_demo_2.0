@@ -28,11 +28,10 @@ def feedback_node(state: OverallState) -> OverallState:
     llm_raw_output = str(response.content)
     suggestions = parse_feedback_llm_output(llm_raw_output)
     LOGGER.info(
-        "feedback_node parsed profile suggestions user_id=%s request_id=%s metric_patches=%d "
+        "feedback_node parsed profile suggestions user_id=%s request_id=%s "
         "capability_evidence=%d knowledge_gap_patches=%d progress_patches=%d markdown_patch=%s",
         str(state.get("user_id") or "default_user"),
         str(state.get("request_id") or ""),
-        len(suggestions.get("metric_patches") or []),
         len(suggestions.get("capability_evidence") or []),
         len(suggestions.get("knowledge_gap_patches") or []),
         len(suggestions.get("progress_patches") or []),
@@ -60,11 +59,10 @@ def feedback_node(state: OverallState) -> OverallState:
     packet = _build_profile_evidence_packet(state, suggestions, raw_prompt)
     LOGGER.info(
         "feedback_node built profile evidence packet user_id=%s request_id=%s source_type=%s "
-        "metric_patches=%d capability_evidence=%d knowledge_gap_patches=%d progress_patches=%d",
+        "capability_evidence=%d knowledge_gap_patches=%d progress_patches=%d",
         str(state.get("user_id") or "default_user"),
         str(state.get("request_id") or ""),
         str(packet.get("source_type") or ""),
-        len(suggestions.get("metric_patches") or []),
         len(suggestions.get("capability_evidence") or []),
         len(suggestions.get("knowledge_gap_patches") or []),
         len(suggestions.get("progress_patches") or []),
@@ -80,7 +78,7 @@ def feedback_node(state: OverallState) -> OverallState:
             "status": "pending_review",
             "feedback_type": _feedback_type(suggestions),
             "message": "已生成画像证据包，等待学情画像中间层审核。",
-            "proposed_metrics": len(suggestions.get("metric_patches") or []),
+            "proposed_metrics": 0,
             "proposed_capability_evidence": len(suggestions.get("capability_evidence") or []),
             "proposed_knowledge_gaps": len(suggestions.get("knowledge_gap_patches") or []),
             "proposed_learning_progress": len(suggestions.get("progress_patches") or []),
@@ -157,7 +155,7 @@ Required classification field:
 
 Rules:
 - QA, lecture, and practice feedback may update learning preferences, weak points, knowledge gaps, or progress; do not invent quiz accuracy.
-- quiz_result may update metrics, knowledge gaps, and progress from accuracy, wrong answers, and concept evidence.
+- quiz_result may update capability_evidence, knowledge gaps, and progress from accuracy, wrong answers, and concept evidence.
 
 你是学习画像更新节点，只负责把前端传回的学习反馈整理为可写入用户画像数据库的 JSON。
 
@@ -169,9 +167,6 @@ Rules:
 
 JSON 格式:
 {{
-  "metric_patches": [
-    {{"field": "safety_score", "delta": 0, "reason": "依据"}}
-  ],
   "capability_evidence": [
     {{
       "id": "attempt_id-question_id",
@@ -208,7 +203,6 @@ JSON 格式:
 }}
 
 约束:
-- metric_patches.delta 建议在 -5 到 +5 之间。
 - completion_rate 使用 0 到 1 的小数。
 - 不要编造输入中没有依据的课程章节或知识点。
 - markdown_patch.content 必须简短，适合追加到用户画像 Markdown。
@@ -222,7 +216,6 @@ def parse_feedback_llm_output(llm_output: str) -> dict[str, Any]:
     data = _load_json_object(llm_output)
     suggestions: dict[str, Any] = {
         "feedback_assessment": _feedback_assessment(data.get("feedback_assessment")),
-        "metric_patches": _list_of_dicts(data.get("metric_patches")),
         "capability_evidence": _list_of_dicts(data.get("capability_evidence")),
         "knowledge_gap_patches": _list_of_dicts(data.get("knowledge_gap_patches")),
         "progress_patches": _list_of_dicts(data.get("progress_patches")),
@@ -365,8 +358,7 @@ def _feedback_type(suggestions: dict[str, Any]) -> str:
 
 def _has_any_suggestion(suggestions: dict[str, Any]) -> bool:
     return bool(
-        suggestions.get("metric_patches")
-        or suggestions.get("capability_evidence")
+        suggestions.get("capability_evidence")
         or suggestions.get("knowledge_gap_patches")
         or suggestions.get("progress_patches")
         or suggestions.get("markdown_patch")

@@ -81,12 +81,11 @@ def profile_assessment_apply_node(state: OverallState) -> OverallState:
     recommendation_refresh_result = _refresh_recommendations_after_profile_update(state)
     LOGGER.info(
         "profile_assessment_apply_node applied profile update user_id=%s request_id=%s accepted=%s event_id=%s "
-        "applied_metrics=%d applied_capability_evidence=%d applied_knowledge_gaps=%d applied_learning_progress=%d",
+        "applied_capability_evidence=%d applied_knowledge_gaps=%d applied_learning_progress=%d",
         str(state.get("user_id") or "default_user"),
         str(state.get("request_id") or review.get("source_packet_id") or ""),
         bool(update_result.get("accepted")),
         str(update_result.get("event_id") or ""),
-        len(update_result.get("applied_metrics") or []),
         len(update_result.get("applied_capability_evidence") or []),
         len(update_result.get("applied_knowledge_gaps") or []),
         len(update_result.get("applied_learning_progress") or []),
@@ -128,7 +127,6 @@ def _reviewed_suggestions(
         "source_node": "profile_assessment_review_node",
         "source_packet_id": str(packet.get("packet_id") or ""),
         "feedback_assessment": suggestions.get("feedback_assessment") if isinstance(suggestions.get("feedback_assessment"), dict) else {},
-        "metric_patches": _list_of_dicts(suggestions.get("metric_patches")),
         "capability_evidence": _normalize_capability_evidence(state, packet, suggestions.get("capability_evidence")),
         "knowledge_gap_patches": _normalize_gap_patches(suggestions.get("knowledge_gap_patches")),
         "progress_patches": _list_of_dicts(suggestions.get("progress_patches")),
@@ -207,8 +205,7 @@ def _markdown_patch(value: Any) -> dict[str, Any]:
 
 def _has_any_profile_change(suggestions: dict[str, Any]) -> bool:
     return bool(
-        suggestions.get("metric_patches")
-        or suggestions.get("capability_evidence")
+        suggestions.get("capability_evidence")
         or suggestions.get("knowledge_gap_patches")
         or suggestions.get("progress_patches")
         or suggestions.get("markdown_patch")

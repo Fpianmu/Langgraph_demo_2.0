@@ -211,7 +211,6 @@ def quiz_adaptation_context_node(state: OverallState) -> OverallState:
         "user_quantitative_profile": {
             "average_score": average_score,
             "capability_profile_score": profile_score,
-            "metrics": profile.get("metrics") or {},
         },
         "quiz_difficulty_policy": policy,
         "quiz_reference_examples": state.get("reference_quiz") if isinstance(state.get("reference_quiz"), dict) else {},
@@ -2291,32 +2290,42 @@ def _normalize_query_for_compare(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip()).lower()
 
 
-def _average_metric_score(metrics: Any) -> float:
-    scores = []
-    if isinstance(metrics, dict):
-        for value in metrics.values():
-            score = _normalized_metric_score(value)
-            if score is not None:
-                scores.append(score)
-    elif isinstance(metrics, list):
-        for item in metrics:
-            if isinstance(item, dict):
-                raw = item.get("score", item.get("value"))
-            else:
-                raw = item
-            score = _normalized_metric_score(raw)
-            if score is not None:
-                scores.append(score)
-    observed_scores = [score for score in scores if score > 0.0]
-    if observed_scores:
-        scores = observed_scores
-    return round(sum(scores) / len(scores), 4) if scores else 0.5
+def _average_profile_score(profile_score: dict[str, Any], profile_context: dict[str, Any]) -> float:
+    overall = _normalized_capability_score(profile_score.get("overall"))
+    if overall is not None:
+        return overall
+
+    dimensions = profile_score.get("dimensions") if isinstance(profile_score.get("dimensions"), dict) else {}
+    dimension_scores = [
+        score
+        for score in (_normalized_capability_score(value) for value in dimensions.values())
+        if score is not None and score > 0.0
+    ]
+    if dimension_scores:
+        return round(sum(dimension_scores) / len(dimension_scores), 4)
+
+    assessment = profile_context.get("capability_assessment") if isinstance(profile_context.get("capability_assessment"), dict) else {}
+    score_map = assessment.get("score_map") if isinstance(assessment.get("score_map"), dict) else {}
+    score_map_values = []
+    for dimension in QUIZ_CAPABILITY_DIMENSIONS:
+        assessed = _normalized_capability_score(score_map.get(dimension))
+        provisional = _normalized_capability_score(score_map.get(f"{dimension}_provisional"))
+        if assessed is not None and assessed > 0.0:
+            score_map_values.append(assessed)
+        elif provisional is not None and provisional > 0.0:
+            score_map_values.append(provisional)
+    if score_map_values:
+        return round(sum(score_map_values) / len(score_map_values), 4)
+
+    return 0.5
 
 
-def _normalized_metric_score(value: Any) -> float | None:
+def _normalized_capability_score(value: Any) -> float | None:
     try:
         parsed = float(value)
     except (TypeError, ValueError):
+        return None
+    if parsed != parsed:
         return None
     if parsed > 1.0:
         parsed = parsed / 100.0

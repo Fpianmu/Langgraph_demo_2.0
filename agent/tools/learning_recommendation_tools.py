@@ -315,15 +315,6 @@ def _score_map(profile_context: dict[str, Any]) -> dict[str, float]:
         score = _number(profile_dimensions.get(dimension))
         if score is not None and score > 0:
             result[dimension] = _clamp_score(score)
-    metrics = profile_context.get("metrics") if isinstance(profile_context.get("metrics"), dict) else {}
-    for dimension, metric_key in {
-        "safety": "safety_score",
-        "foundations": "theory_score",
-        "machining_operation": "operation_score",
-        "programming": "programming_score",
-    }.items():
-        if result[dimension] == 60.0:
-            result[dimension] = _metric_score(metrics.get(metric_key), result[dimension])
     assessment = profile_context.get("capability_assessment") if isinstance(profile_context.get("capability_assessment"), dict) else {}
     score_map = assessment.get("score_map") if isinstance(assessment.get("score_map"), dict) else {}
     for dimension in CAPABILITY_LABELS:
@@ -336,13 +327,6 @@ def _score_map(profile_context: dict[str, Any]) -> dict[str, float]:
         elif _number(provisional):
             result[dimension] = _clamp_score(provisional)
     return result
-
-
-def _metric_score(value: Any, default: float) -> float:
-    score = _number(value)
-    if score is None or score <= 0:
-        return default
-    return _clamp_score(score)
 
 
 def _profile_text(profile_context: dict[str, Any]) -> str:

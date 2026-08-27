@@ -51,7 +51,7 @@ def quiz_feedback_context_loader_node(state: OverallState) -> OverallState:
             "status": "pending_review",
             "feedback_type": "quiz_result",
             "message": "built profile evidence packet from quiz attempt evidence",
-            "proposed_metrics": len(suggestions.get("metric_patches") or []),
+            "proposed_metrics": 0,
             "proposed_capability_evidence": len(suggestions.get("capability_evidence") or []),
             "proposed_knowledge_gaps": len(suggestions.get("knowledge_gap_patches") or []),
             "proposed_learning_progress": len(suggestions.get("progress_patches") or []),
@@ -92,13 +92,6 @@ def _quiz_profile_suggestions(*, user_id: str, course_id: str, chapter_id: str, 
             "confidence": 1.0,
             "rationale": "deterministic update from stored quiz answers and question knowledge points",
         },
-        "metric_patches": [
-            {
-                "field": "theory_score",
-                "value": round(accuracy * 100),
-                "reason": "quiz attempt accuracy",
-            }
-        ],
         "capability_evidence": capability_evidence,
         "knowledge_gap_patches": gap_patches,
         "progress_patches": [
