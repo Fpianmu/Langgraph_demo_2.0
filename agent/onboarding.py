@@ -75,6 +75,201 @@ ONBOARDING_QUESTIONS: list[dict[str, Any]] = [
         "difficulty": "medium",
         "points": 1,
     },
+    {
+        "id": "onboarding_safety_002",
+        "stem": "进行日常开机前检查时，以下哪项更符合安全要求？",
+        "question_type": "single_choice",
+        "options": ["确认防护装置、润滑和冷却状态正常", "先把主轴转速调到最高", "关闭所有报警提示再检查", "跳过空运行直接加工"],
+        "answer": "A",
+        "capability_dimension": "safety",
+        "knowledge_points": [
+            {"id": "cnc_lathe.safety.startup_check", "name": "开机前安全检查", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_safety_003",
+        "stem": "发现机床运行异常或报警后，首先应该怎么做？",
+        "question_type": "single_choice",
+        "options": ["立即停止运行并按规定处理", "继续加工观察一下", "只把报警音关掉", "把进给倍率调到最大"],
+        "answer": "A",
+        "capability_dimension": "safety",
+        "knowledge_points": [
+            {"id": "cnc_lathe.safety.abnormal_stop", "name": "异常报警与停机处理", "weight": 1.0}
+        ],
+        "difficulty": "medium",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_foundations_002",
+        "stem": "数控机床通常由哪三大部分组成？",
+        "question_type": "single_choice",
+        "options": ["机床本体、数控系统、伺服/驱动系统", "刀具、工件、夹具", "冷却液、润滑油、切削液", "显示器、键盘、鼠标"],
+        "answer": "A",
+        "capability_dimension": "foundations",
+        "knowledge_points": [
+            {"id": "cnc_lathe.1.2.machine_composition", "name": "机床组成与控制结构", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_foundations_003",
+        "stem": "数控系统的主要作用是什么？",
+        "question_type": "single_choice",
+        "options": ["接收程序并控制各坐标轴按指令运动", "只负责给机床上油", "只负责显示时间", "只负责夹紧工件"],
+        "answer": "A",
+        "capability_dimension": "foundations",
+        "knowledge_points": [
+            {"id": "cnc_lathe.1.2.nc_system_role", "name": "数控系统的控制作用", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_programming_002",
+        "stem": "在数控编程中，G00 通常表示什么？",
+        "question_type": "single_choice",
+        "options": ["快速定位", "直线插补", "程序结束", "暂停等待"],
+        "answer": "A",
+        "capability_dimension": "programming",
+        "knowledge_points": [
+            {"id": "cnc_lathe.4.1.rapid_positioning", "name": "快速定位指令", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_operation_002",
+        "stem": "装夹新工件后、正式切削前最稳妥的验证方式是什么？",
+        "question_type": "single_choice",
+        "options": ["先空运行或做仿真检查", "直接全速切削", "先关闭单段运行", "先把刀补清零再启动"],
+        "answer": "A",
+        "capability_dimension": "machining_operation",
+        "knowledge_points": [
+            {"id": "cnc_lathe.operation.dry_run_validation", "name": "空运行验证", "weight": 1.0}
+        ],
+        "difficulty": "medium",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_quality_002",
+        "stem": "如果实测尺寸超出图样公差范围，结果应判定为什么？",
+        "question_type": "single_choice",
+        "options": ["不合格", "合格", "可忽略", "只要表面光洁就算合格"],
+        "answer": "A",
+        "capability_dimension": "quality_control",
+        "knowledge_points": [
+            {"id": "cnc_lathe.quality.out_of_tolerance", "name": "超差判定", "weight": 1.0}
+        ],
+        "difficulty": "medium",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_foundations_004",
+        "stem": "数控车床程序中的坐标值主要用于什么？",
+        "question_type": "single_choice",
+        "options": ["控制刀具和工件的相对运动位置", "记录机床外壳颜色", "提高冷却液压力", "确定表面光洁度"],
+        "answer": "A",
+        "capability_dimension": "foundations",
+        "knowledge_points": [
+            {"id": "cnc_lathe.1.3.coordinate_control", "name": "坐标值控制运动", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_foundations_005",
+        "stem": "工件坐标系通常是在什么基础上建立的？",
+        "question_type": "single_choice",
+        "options": ["工件装夹和编程需求", "机床外壳颜色", "润滑油品牌", "刀具包装方式"],
+        "answer": "A",
+        "capability_dimension": "foundations",
+        "knowledge_points": [
+            {"id": "cnc_lathe.1.3.workpiece_coordinate_system", "name": "工件坐标系", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_safety_004",
+        "stem": "清理切屑时，比较安全的做法是？",
+        "question_type": "single_choice",
+        "options": ["停机后使用专用工具处理", "边加工边徒手拿起", "直接用压缩空气对着人吹", "切削时伸手进入危险区"],
+        "answer": "A",
+        "capability_dimension": "safety",
+        "knowledge_points": [
+            {"id": "cnc_lathe.safety.chip_removal", "name": "切屑清理安全", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_safety_005",
+        "stem": "对工件测量前，首先应该确认什么？",
+        "question_type": "single_choice",
+        "options": ["主轴已停止且刀具远离工件", "先把转速调到最高", "关闭所有报警提示", "先继续切削一个零件"],
+        "answer": "A",
+        "capability_dimension": "safety",
+        "knowledge_points": [
+            {"id": "cnc_lathe.safety.measure_before_stop", "name": "测量前停机确认", "weight": 1.0}
+        ],
+        "difficulty": "medium",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_programming_003",
+        "stem": "在数控编程中，G01 通常表示什么？",
+        "question_type": "single_choice",
+        "options": ["快速定位", "直线插补", "圆弧插补", "程序结束"],
+        "answer": "B",
+        "capability_dimension": "programming",
+        "knowledge_points": [
+            {"id": "cnc_lathe.4.1.linear_interpolation", "name": "直线插补", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_programming_004",
+        "stem": "在数控编程中，M03 通常表示什么？",
+        "question_type": "single_choice",
+        "options": ["主轴正转", "主轴停止", "倒车", "典型显示"],
+        "answer": "A",
+        "capability_dimension": "programming",
+        "knowledge_points": [
+            {"id": "cnc_lathe.4.1.spindle_clockwise", "name": "主轴正转指令", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_operation_003",
+        "stem": "首件加工完成后，最关键的确认步骤是什么？",
+        "question_type": "single_choice",
+        "options": ["按图样复核关键尺寸", "直接批量加工", "先修改所有报警", "先关闭主轴润滑"],
+        "answer": "A",
+        "capability_dimension": "machining_operation",
+        "knowledge_points": [
+            {"id": "cnc_lathe.operation.first_article_check", "name": "首件检验", "weight": 1.0}
+        ],
+        "difficulty": "medium",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_quality_003",
+        "stem": "同一尺寸多次测量差异较大时，首先应该如何处理？",
+        "question_type": "single_choice",
+        "options": ["清洁量具并重复测量", "直接取最大值", "忽略差异继续判定", "只看外观是否光亮"],
+        "answer": "A",
+        "capability_dimension": "quality_control",
+        "knowledge_points": [
+            {"id": "cnc_lathe.quality.remeasure_consistency", "name": "量具清洁与重复测量", "weight": 1.0}
+        ],
+        "difficulty": "medium",
+        "points": 1,
+    },
 ]
 
 _ASSESSMENT_SESSIONS: dict[str, dict[str, Any]] = {}
