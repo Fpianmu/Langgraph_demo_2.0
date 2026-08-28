@@ -50,6 +50,14 @@ export type QuizQuestion = {
     | "true_false"
     | "cloze"
     | "short_answer";
+  attachments?: Array<{
+    type: "image" | "video" | "file";
+    title?: string;
+    path?: string;
+    url?: string;
+    data_url?: string;
+    alt?: string;
+  }>;
   options: string[];
   answer: string;
   reference_answer?: string;

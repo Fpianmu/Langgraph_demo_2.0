@@ -433,6 +433,16 @@ function applyBlueprintToQuestion(
   return normalized;
 }
 
+function quizQuestionImageAttachments(question: QuizQuestion) {
+  return (question.attachments ?? [])
+    .filter((attachment) => attachment.type === "image")
+    .map((attachment) => ({
+      ...attachment,
+      src: attachment.data_url || attachment.url || attachment.path || "",
+    }))
+    .filter((attachment) => attachment.src);
+}
+
 function mergeQuizResponses(
   responses: AgentResponse[],
   questions: QuizQuestion[],
@@ -2055,6 +2065,27 @@ function QuizView({
                   </div>
                 </div>
                 <h3 className="quiz-question">{question.stem}</h3>
+                {!!quizQuestionImageAttachments(question).length && (
+                  <div className="quiz-attachments">
+                    {quizQuestionImageAttachments(question).map(
+                      (attachment, attachmentIndex) => (
+                        <figure
+                          className="quiz-attachment"
+                          key={`${attachment.src}-${attachmentIndex}`}
+                        >
+                          <img
+                            src={attachment.src}
+                            alt={attachment.alt || attachment.title || "题目图片"}
+                            loading="lazy"
+                          />
+                          {attachment.title && (
+                            <figcaption>{attachment.title}</figcaption>
+                          )}
+                        </figure>
+                      ),
+                    )}
+                  </div>
+                )}
                 {isSubjectiveQuizQuestion(question) ? (
                   <div className="subjective-answer-field">
                     <label htmlFor={`answer-${question.id}`}>你的答案</label>

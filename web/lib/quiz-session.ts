@@ -126,6 +126,27 @@ function uniqueStrings(values: unknown[], max = 100): string[] {
   ].slice(0, max);
 }
 
+function normalizeQuestionAttachments(
+  value: unknown,
+): QuizQuestion["attachments"] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const attachments = value.flatMap((raw) => {
+    const item = asRecord(raw);
+    if (!item) return [];
+    const type = cleanString(item.type, 30).toLowerCase();
+    if (type !== "image" && type !== "video" && type !== "file") return [];
+    const title = cleanString(item.title, 300) || undefined;
+    const path = cleanString(item.path, 2_000) || undefined;
+    const url = cleanString(item.url, 2_000) || undefined;
+    const dataUrl =
+      cleanString(item.data_url ?? item.dataUrl, 2_000_000) || undefined;
+    const alt = cleanString(item.alt, 500) || title || undefined;
+    if (!path && !url && !dataUrl) return [];
+    return [{ type, title, path, url, data_url: dataUrl, alt }];
+  });
+  return attachments.length ? attachments : undefined;
+}
+
 function difficulty(value: unknown): QuizSessionDifficulty {
   const normalized = cleanString(value, 30).toLowerCase();
   if (normalized === "hard" || normalized.includes("进阶")) return "hard";
@@ -352,6 +373,7 @@ export function createQuizSession(input: {
       cleanString(question.concise_explanation, 10_000) || undefined,
     detailed_explanation:
       cleanString(question.detailed_explanation, 40_000) || undefined,
+    attachments: normalizeQuestionAttachments(question.attachments),
     difficulty: cleanString(question.difficulty, 50) || input.difficulty,
     question_type: quizQuestionType(question),
     points: quizQuestionPoints(question),
@@ -607,6 +629,7 @@ function normalizeQuestion(
     explanation: cleanString(item.explanation),
     concise_explanation: cleanString(item.concise_explanation, 10_000) || undefined,
     detailed_explanation: cleanString(item.detailed_explanation, 40_000) || undefined,
+    attachments: normalizeQuestionAttachments(item.attachments),
     difficulty: cleanString(item.difficulty, 50) || "easy",
     question_type: type,
     points: quizQuestionPoints(item as QuizQuestion),

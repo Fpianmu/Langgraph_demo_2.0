@@ -24,3 +24,13 @@
 - cnc_lathe: standard（标准）
   - 分配来源: registration_assessment
   - 分配依据: 已完成基础安全与机床认知，适合标准路径继续学习。
+
+## 上机操作反馈
+- 章节: 5.1
+- 任务: lathe_part_001
+- 最终结果: pass_with_warning
+- 得分: 100
+- 视觉状态: warning
+- 尺寸通过数: 7
+- 尺寸失败数: 0
+- 缺失数: 0

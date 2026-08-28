@@ -279,44 +279,24 @@ if __name__ == "__main__":
 
     result = graph.invoke(
         {
-            "content_type": "operation_review",
-            "request_id": "req_operation_review_001",
+            "content_type": "qa",
+            "request_id": "req_qa_001",
             "user_id": "user_001",
             "course_id": "cnc_lathe",
-            "chapter_id": "5.1",
-            "task_id": "task_001",
-            "workpiece_id": "lathe_part_001",
-            "submission_id": "submission_real_001",
-
-            "uploaded_images": [
-                {
-                    "name": "front_image",
-                    "path": r"C:\Users\popkik\Desktop\front.jpg"
-                },
-                {
-                    "name": "side_image",
-                    "path": r"C:\Users\popkik\Desktop\side.jpg"
-                }
-            ],
-
-            "measurement_params": {
-                "outer_diameter_1": 20.01,
-                "outer_diameter_2": 15.99,
-                "total_length": 60.03
-            }
+            "chapter_id": "1.1",
+            "raw_prompt": "铣削内轮廓时，如果无法切线切入，如何确定法向切入点的最佳位置？",
         }
     )
 
     print(json.dumps(
         {
-            "final_result": result.get("operation_review_result", {}).get("final_result"),
-            "score": result.get("operation_review_result", {}).get("score"),
-            "grade": result.get("operation_review_result", {}).get("grade"),
-            "operation_review_paths": result.get("operation_review_paths"),
-            "vl_analysis_result": result.get("vl_analysis_result"),
-            "measurement_comparison_result": result.get("measurement_comparison_result"),
-            "operation_review_result": result.get("operation_review_result"),
+            "final_result": result.get("final_output"),
+            "qa_session_id": result.get("qa_session_id"),
+            "qa_artifact_paths": result.get("qa_artifact_paths"),
+            "profile_md_ref": result.get("profile_md_ref"),
+            "saved_outputs": result.get("saved_outputs"),
         },
         ensure_ascii=False,
         indent=2,
     ))
+
