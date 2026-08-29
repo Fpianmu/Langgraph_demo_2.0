@@ -22,7 +22,10 @@ VerificationRoute = Literal[
 @log_node_runtime("verification_router")
 def verification_router(state: OverallState) -> Command[VerificationRoute]:
     checks = state.get("claim_checks") or []
-    if not checks:
+    quiz_schema = state.get("quiz_schema_validation_result")
+    if isinstance(quiz_schema, dict) and quiz_schema.get("status") != "success":
+        route: VerificationRoute = "safe_reject_node"
+    elif not checks:
         route: VerificationRoute = "safe_reject_node"
     elif all(item.get("label") == "supported" and item.get("evidence_refs") for item in checks):
         route = "verified_persistence_node"

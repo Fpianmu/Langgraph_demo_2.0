@@ -1,0 +1,12 @@
+{
+  "machine_id": "default_lathe",
+  "machine_type": "cnc_lathe",
+  "controller": "HNC",
+  "unit": "mm",
+  "axis": ["X", "Z"],
+  "coordinate_mode": "diameter_x",
+  "spindle_speed_range": {
+    "min_rpm": 50,
+    "max_rpm": 3000
+  }
+}

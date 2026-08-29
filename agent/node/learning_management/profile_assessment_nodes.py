@@ -134,6 +134,21 @@ def _reviewed_suggestions(
     }
 
 
+def review_profile_update_suggestions(
+    state: OverallState,
+    packet: dict[str, Any],
+    suggestions: dict[str, Any],
+) -> dict[str, Any]:
+    """Validate deterministic profile evidence outside the LangGraph node.
+
+    The HTTP compatibility endpoint uses the same allow-lists and field
+    normalization as the graph's review/apply path.  Keeping one validator
+    prevents browser-restored quiz evidence from bypassing profile policy.
+    """
+
+    return _reviewed_suggestions(state, packet, suggestions)
+
+
 def _normalize_capability_evidence(state: OverallState, packet: dict[str, Any], value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []

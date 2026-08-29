@@ -1,0 +1,86 @@
+{
+  "chapter_id": "3.8",
+  "source_file": "异常处理与手动运行复盘.重点.json",
+  "questions": [
+    {
+      "question_id": "q_3_8_001",
+      "type": "short_answer",
+      "stem": "上电完成后，为什么要先检查面板指示灯正常，再松开急停？",
+      "reference_answer": "为了确认系统上电状态正常，避免带着异常状态进入运行。",
+      "explanation": "急停松开后设备可能进入可运行状态，因此必须先确认显示和指示状态正常。",
+      "difficulty": "easy",
+      "knowledge_points": ["上电流程", "急停", "状态确认"],
+      "core_exam_points": ["上电后先确认状态再解除急停"]
+    },
+    {
+      "question_id": "q_3_8_002",
+      "type": "short_answer",
+      "stem": "关机后如果需要重新开机，资料要求至少保持关机多久？",
+      "reference_answer": "20 秒以上。",
+      "explanation": "保持关机 20 秒以上有助于系统电气状态稳定。",
+      "difficulty": "easy",
+      "knowledge_points": ["关机流程", "重新开机", "电气稳定"],
+      "core_exam_points": ["记住重新开机前的等待时间"]
+    },
+    {
+      "question_id": "q_3_8_003",
+      "type": "short_answer",
+      "stem": "解除超程时，轴应该向哪个方向移动？",
+      "reference_answer": "向超程轴的相反方向移动。",
+      "explanation": "超程已经处于危险边界，必须反向退出，不能继续同方向移动。",
+      "difficulty": "easy",
+      "knowledge_points": ["超程解除", "反向移动", "安全操作"],
+      "core_exam_points": ["解除超程必须反向退回"]
+    },
+    {
+      "question_id": "q_3_8_004",
+      "type": "short_answer",
+      "stem": "硬超程通常由什么触发？",
+      "reference_answer": "由伺服轴碰到行程极限开关触发。",
+      "explanation": "伺服轴两端的限位开关用于防止碰撞，碰到极限开关就会产生硬超程保护。",
+      "difficulty": "normal",
+      "knowledge_points": ["硬超程", "限位开关", "行程保护"],
+      "core_exam_points": ["知道硬超程和限位开关的关系"]
+    },
+    {
+      "question_id": "q_3_8_005",
+      "type": "short_answer",
+      "stem": "复位后，M、S 功能输出会怎样？",
+      "reference_answer": "M、S 功能输出无效。",
+      "explanation": "复位会停止自动运行并使相关输出无效，但模态功能保持。",
+      "difficulty": "normal",
+      "knowledge_points": ["复位", "M 功能", "S 功能"],
+      "core_exam_points": ["理解复位后的系统状态"]
+    },
+    {
+      "question_id": "q_3_8_006",
+      "type": "short_answer",
+      "stem": "急停解除后，为什么应重新执行回参考点操作？",
+      "reference_answer": "为了确保各轴坐标位置正确，重新建立可靠的位置基准。",
+      "explanation": "急停属于异常中断，解除后需要重新确认机床坐标基准。",
+      "difficulty": "normal",
+      "knowledge_points": ["急停解除", "回参考点", "坐标基准"],
+      "core_exam_points": ["急停后重新回参考点"]
+    },
+    {
+      "question_id": "q_3_8_007",
+      "type": "short_answer",
+      "stem": "在 MDI 中让主轴以 800 r/min 正转，应该输入什么指令？",
+      "reference_answer": "M03 S800。",
+      "explanation": "M03 表示主轴正转，S800 表示主轴转速为 800 r/min。",
+      "difficulty": "easy",
+      "knowledge_points": ["MDI", "M03", "S 指令"],
+      "core_exam_points": ["掌握常见 MDI 主轴启动指令"]
+    },
+    {
+      "question_id": "q_3_8_008",
+      "type": "short_answer",
+      "stem": "手摇进给前需要先确认哪些设置？",
+      "reference_answer": "需要确认工作方式、目标轴和倍率。",
+      "explanation": "手摇进给是微调操作，轴选错或倍率选错都可能造成位置错误。",
+      "difficulty": "normal",
+      "knowledge_points": ["手摇进给", "轴选择", "倍率"],
+      "core_exam_points": ["手摇前必须确认轴向和倍率"]
+    }
+  ]
+}

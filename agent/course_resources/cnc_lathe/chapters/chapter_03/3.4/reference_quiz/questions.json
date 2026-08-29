@@ -1,0 +1,86 @@
+{
+  "chapter_id": "3.4",
+  "source_file": "坐标系设置与输入方式.重点.json",
+  "questions": [
+    {
+      "question_id": "q_3_4_001",
+      "type": "short_answer",
+      "stem": "坐标系界面里，哪一组区域不能直接进入修改？",
+      "reference_answer": "2 区。",
+      "explanation": "教程说明 2 区显示的是机床实际和相对实际坐标，只用于观察，不可直接设置。",
+      "difficulty": "easy",
+      "knowledge_points": ["坐标系界面", "区域划分", "机床实际坐标"],
+      "core_exam_points": ["能区分可设置区和只读区"]
+    },
+    {
+      "question_id": "q_3_4_002",
+      "type": "short_answer",
+      "stem": "已知工件零点坐标时，最适合用哪种输入方式？",
+      "reference_answer": "直接输入方式。",
+      "explanation": "直接输入适合已经知道零点数据的情况，可以把已知坐标直接写入选定坐标系。",
+      "difficulty": "easy",
+      "knowledge_points": ["直接输入", "工件零点", "坐标系设置"],
+      "core_exam_points": ["知道零点数据时优先直接输入"]
+    },
+    {
+      "question_id": "q_3_4_003",
+      "type": "short_answer",
+      "stem": "完成对刀后，把当前位置直接登记成工件零点，应该用哪种输入方式？",
+      "reference_answer": "当前值输入方式。",
+      "explanation": "当前值输入就是把此时机床的位置设为选中的工件坐标零点。",
+      "difficulty": "easy",
+      "knowledge_points": ["当前值输入", "对刀", "工件坐标零点"],
+      "core_exam_points": ["当前值输入用于把当前位置设为零点"]
+    },
+    {
+      "question_id": "q_3_4_004",
+      "type": "short_answer",
+      "stem": "工件尺寸需要小幅修正时，通常用哪种输入方式？",
+      "reference_answer": "增量值输入方式。",
+      "explanation": "增量输入适合在原有坐标基础上做小范围微调，不需要重建整套坐标系。",
+      "difficulty": "easy",
+      "knowledge_points": ["增量输入", "微调", "坐标修正"],
+      "core_exam_points": ["小修正优先用增量输入"]
+    },
+    {
+      "question_id": "q_3_4_005",
+      "type": "short_answer",
+      "stem": "设置功能集里常见的工件坐标系编号有哪些？",
+      "reference_answer": "G54 到 G59，另外还有 G54.1P1 到 G54.1P60 的扩展坐标系。",
+      "explanation": "教程把常用工件坐标系和扩展工件坐标系分开说明，便于多工位或多零点使用。",
+      "difficulty": "normal",
+      "knowledge_points": ["G54", "G59", "扩展坐标系"],
+      "core_exam_points": ["知道常用工件坐标系编号范围"]
+    },
+    {
+      "question_id": "q_3_4_006",
+      "type": "short_answer",
+      "stem": "坐标系界面里，工件坐标系一般在哪两个区域之间切换？",
+      "reference_answer": "1 区和 3 区之间。",
+      "explanation": "教程明确写了 1 区和 3 区可以切换，2 区为只读显示区。",
+      "difficulty": "normal",
+      "knowledge_points": ["坐标系分区", "区域切换", "只读显示"],
+      "core_exam_points": ["记住 1 区、3 区可设置，2 区不可改"]
+    },
+    {
+      "question_id": "q_3_4_007",
+      "type": "short_answer",
+      "stem": "为什么当前值输入适合在对刀完成后使用？",
+      "reference_answer": "因为刀具已经移动到工件零点位置，此时把当前位置直接设为零点最方便、也最贴合实际。",
+      "explanation": "当前值输入就是把当前机床位置登记为工件零点，和对刀后的实际位置最匹配。",
+      "difficulty": "normal",
+      "knowledge_points": ["当前值输入", "对刀完成", "零点登记"],
+      "core_exam_points": ["理解当前值输入和对刀的配合关系"]
+    },
+    {
+      "question_id": "q_3_4_008",
+      "type": "short_answer",
+      "stem": "如果零点基本正确，只想做一点小修正，应该优先怎么处理？",
+      "reference_answer": "用增量值输入做微调。",
+      "explanation": "增量输入适合在原有坐标基础上做小幅偏移，避免重新建立整套坐标关系。",
+      "difficulty": "normal",
+      "knowledge_points": ["增量输入", "坐标微调", "偏移修正"],
+      "core_exam_points": ["会按场景选择增量输入"]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "task_id": "task_001",
+  "question_number": "4.1-001",
+  "title": "外圆与端面加工程序编写",
+  "question": "question.md",
+  "part_drawing": "part_drawing.png",
+  "reference_code": "reference_code.nc",
+  "standard_dimensions": "standard_dimensions.json",
+  "expected_result": "expected_result.json",
+  "rule_ids": [
+    "hnc_instruction_table",
+    "hnc_gcode_mapping",
+    "machine_profile"
+  ]
+}

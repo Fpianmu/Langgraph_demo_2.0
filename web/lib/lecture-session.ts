@@ -99,14 +99,27 @@ function lectureCandidates(response: AgentResponse): Record<string, unknown>[] {
   const finalMaterials = asRecord(root?.final_materials);
   const nestedMaterials = asRecord(finalOutput?.materials);
   return [
-    root?.personalized_lecture_output,
-    root?.final_lecture_output,
-    finalMaterials?.lecture,
     nestedMaterials?.lecture,
     finalOutput,
+    finalMaterials?.lecture,
+    root?.final_lecture_output,
+    root?.personalized_lecture_output,
   ]
     .map(asRecord)
-    .filter((item): item is Record<string, unknown> => !!item);
+    .filter(
+      (item): item is Record<string, unknown> =>
+        !!item && !isRejectedMaterial(item),
+    );
+}
+
+function isRejectedMaterial(material: Record<string, unknown>): boolean {
+  const meta = asRecord(material.meta);
+  const statuses = [meta?.status, meta?.verification_status]
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim().toLowerCase());
+  return statuses.some((status) =>
+    ["rejected", "validation_error", "failed", "error"].includes(status),
+  );
 }
 
 function parseSections(value: unknown): LectureSection[] {
@@ -173,12 +186,20 @@ export function createLectureSession(input: {
   id: string;
   courseId: string;
   chapterId: string;
+  chapterTitle?: string;
   response: AgentResponse;
   capabilityEvidence: CapabilityEvidence[];
   generationReason: LectureGenerationReason;
   predecessorId?: string | null;
   createdAt?: string;
 }): LectureSession {
+  if (input.response.status !== "success") {
+    const reason = cleanString(input.response.check_report?.summary, 1_000);
+    throw new Error(
+      reason ||
+        `中央调度器未生成可用讲义（状态：${input.response.status || "unknown"}）`,
+    );
+  }
   const timestamp = input.createdAt ?? new Date().toISOString();
   let title = "";
   let summary = "";
@@ -212,7 +233,9 @@ export function createLectureSession(input: {
   ]);
   const confidence = Number(input.response.rag_package?.confidence);
   const chapterTitle =
-    COURSE_CHAPTERS.find(([id]) => id === input.chapterId)?.[1] ?? input.chapterId;
+    cleanString(input.chapterTitle, 500) ||
+    COURSE_CHAPTERS.find(([id]) => id === input.chapterId)?.[1] ||
+    input.chapterId;
   return {
     modelVersion: LECTURE_SESSION_MODEL_VERSION,
     id: input.id,

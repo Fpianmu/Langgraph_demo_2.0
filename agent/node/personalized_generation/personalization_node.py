@@ -508,6 +508,13 @@ content_type:
 user_profile_markdown:
 {profile_md_content}
 
+frontend_learning_context:
+{json.dumps({
+    "learner_profile": state.get("learner_profile") or {},
+    "latest_scores": state.get("latest_scores") or {},
+    "learning_progress": state.get("learning_progress") or {},
+}, ensure_ascii=False)}
+
 course_resource_reference:
 {_course_resource_prompt_context(state)}
 

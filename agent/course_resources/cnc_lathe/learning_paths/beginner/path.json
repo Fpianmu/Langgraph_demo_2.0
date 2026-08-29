@@ -1,0 +1,118 @@
+{
+  "path_id": "beginner",
+  "title": "基础学习路径",
+  "profile_level": "beginner",
+  "generation_policy": {
+    "difficulty": "基础",
+    "pace": "慢速",
+    "hint_level": "高",
+    "task_requirement": "强调概念识别、步骤复述和安全意识"
+  },
+  "chapters": [
+    {
+      "chapter_id": "1.1",
+      "chapter_title": "数控车床基础认知",
+      "chapter_order": 1,
+      "next_chapter_id": "2.1",
+      "required": true,
+      "focus": {
+        "summary": "建立数控车床结构与工作原理的整体认知",
+        "required_material_types": ["lecture", "quiz"],
+        "focus_items": [
+          {
+            "id": "cnc_lathe.beginner.1.1",
+            "name": "数控车床基础认知",
+            "description": "在较高提示强度下识别主要结构及其基本作用。",
+            "priority": "high",
+            "category": "lecture",
+            "rag_keywords": ["数控车床结构", "主轴刀架进给系统", "基础工作原理"]
+          }
+        ]
+      }
+    },
+    {
+      "chapter_id": "2.1",
+      "chapter_title": "上机安全基础",
+      "chapter_order": 2,
+      "next_chapter_id": "3.1",
+      "required": true,
+      "focus": {
+        "summary": "掌握着装、设备检查与安全操作要求",
+        "required_material_types": ["lecture", "quiz"],
+        "focus_items": [
+          {
+            "id": "cnc_lathe.beginner.2.1",
+            "name": "上机安全基础",
+            "description": "能够按清单复述并执行上机前安全检查。",
+            "priority": "high",
+            "category": "safety",
+            "rag_keywords": ["数控车床安全着装", "上机前检查", "急停与防护"]
+          }
+        ]
+      }
+    },
+    {
+      "chapter_id": "3.1",
+      "chapter_title": "数控车床基本操作",
+      "chapter_order": 3,
+      "next_chapter_id": "4.1",
+      "required": true,
+      "focus": {
+        "summary": "按步骤完成开关机、回参考点和基础操作",
+        "required_material_types": ["lecture", "practice", "quiz"],
+        "focus_items": [
+          {
+            "id": "cnc_lathe.beginner.3.1",
+            "name": "机床基本操作",
+            "description": "依据步骤提示完成开机、回参考点和关机。",
+            "priority": "high",
+            "category": "practice",
+            "rag_keywords": ["数控车床开机", "回参考点", "安全关机步骤"]
+          }
+        ]
+      }
+    },
+    {
+      "chapter_id": "4.1",
+      "chapter_title": "CNC 代码练习与仿真",
+      "chapter_order": 4,
+      "next_chapter_id": "5.1",
+      "required": true,
+      "focus": {
+        "summary": "理解基本程序结构并在提示下完成代码仿真",
+        "required_material_types": ["lecture", "practice", "quiz"],
+        "focus_items": [
+          {
+            "id": "cnc_lathe.beginner.4.1",
+            "name": "基础 G 代码与仿真",
+            "description": "识别程序结构并根据提示检查刀具路径。",
+            "priority": "high",
+            "category": "programming",
+            "rag_keywords": ["CNC程序结构", "基础G代码", "刀具路径仿真"]
+          }
+        ]
+      }
+    },
+    {
+      "chapter_id": "5.1",
+      "chapter_title": "上机测试与结果审查",
+      "chapter_order": 5,
+      "next_chapter_id": null,
+      "required": true,
+      "focus": {
+        "summary": "完成基础加工任务、测量记录和结果提交",
+        "required_material_types": ["lecture", "practice", "quiz"],
+        "focus_items": [
+          {
+            "id": "cnc_lathe.beginner.5.1",
+            "name": "基础上机测试",
+            "description": "按实训手册完成加工、测量和工件结果上传。",
+            "priority": "high",
+            "category": "operation_task",
+            "rag_keywords": ["上机测试准备", "工件尺寸测量", "加工结果上传"]
+          }
+        ]
+      }
+    }
+  ]
+}

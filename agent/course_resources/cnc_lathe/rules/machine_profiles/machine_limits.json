@@ -1,0 +1,9 @@
+{
+  "travel_limits": {
+    "x_min": -5,
+    "x_max": 120,
+    "z_min": -80,
+    "z_max": 10
+  },
+  "collision_policy": "fail_on_tool_workpiece_intersection"
+}

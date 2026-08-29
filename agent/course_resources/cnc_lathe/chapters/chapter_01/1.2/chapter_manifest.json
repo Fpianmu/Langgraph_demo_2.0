@@ -1,0 +1,45 @@
+{
+  "chapter_id": "1.2",
+  "chapter_group_id": "chapter_01",
+  "title": "数控机床组成工作原理与特点",
+  "lecture": {
+    "manual_lecture": "数控机床组成工作原理与特点.md"
+  },
+  "reference_quiz": {
+    "questions": "reference_quiz/questions.json"
+  },
+  "focus_source": "数控机床组成工作原理与特点.重点.json",
+  "focus": {
+    "summary": "本章重点是理解数控机床的组成、工作原理和主要特点：控制介质承载程序，CNC 识别运算并发出指令，伺服驱动系统完成运动控制，辅助控制装置完成主轴、冷却、润滑等逻辑动作，机床本体完成实际加工。",
+    "required_material_types": [
+      "lecture",
+      "quiz"
+    ],
+    "focus_items": [
+      {
+        "id": "cnc_lathe.1.2.lecture",
+        "name": "数控机床组成工作原理与特点讲义",
+        "category": "lecture",
+        "rag_keywords": [
+          "数控机床由哪些部分组成",
+          "CNC 装置的作用是什么",
+          "运动控制和逻辑控制有什么区别",
+          "伺服驱动系统有什么作用",
+          "数控机床有哪些特点"
+        ]
+      },
+      {
+        "id": "cnc_lathe.1.2.quiz",
+        "name": "数控机床组成工作原理与特点测试题",
+        "category": "quiz",
+        "rag_keywords": [
+          "控制介质题",
+          "CNC 工作原理题",
+          "伺服系统题",
+          "PLC 逻辑控制题",
+          "数控机床特点题"
+        ]
+      }
+    ]
+  }
+}

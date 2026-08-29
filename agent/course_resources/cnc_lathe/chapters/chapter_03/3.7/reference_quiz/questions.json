@@ -1,0 +1,86 @@
+{
+  "chapter_id": "3.7",
+  "source_file": "自动运行与运行控制.重点.json",
+  "questions": [
+    {
+      "question_id": "q_3_7_001",
+      "type": "short_answer",
+      "stem": "自动运行前，除了加载程序，还必须确认哪些准备？",
+      "reference_answer": "必须确认刀具设置、安全检查和机床状态正常。",
+      "explanation": "自动加工不是只按循环启动，运行前准备决定安全和加工质量。",
+      "difficulty": "easy",
+      "knowledge_points": ["自动运行", "刀具设置", "安全检查"],
+      "core_exam_points": ["自动运行前必须完成加工准备"]
+    },
+    {
+      "question_id": "q_3_7_002",
+      "type": "short_answer",
+      "stem": "单段运行时，每按一次循环启动会发生什么？",
+      "reference_answer": "运行一段程序，然后等待下一次循环启动。",
+      "explanation": "单段运行用于逐段观察程序动作，便于教学和调试。",
+      "difficulty": "easy",
+      "knowledge_points": ["单段运行", "循环启动", "程序观察"],
+      "core_exam_points": ["理解单段运行的执行方式"]
+    },
+    {
+      "question_id": "q_3_7_003",
+      "type": "short_answer",
+      "stem": "程序段前有跳段符 `/` 时，系统一定会跳过该行吗？",
+      "reference_answer": "不一定，只有按下程序跳段键后才会跳过。",
+      "explanation": "跳段符只是标记，是否跳过取决于程序跳段功能是否启用。",
+      "difficulty": "normal",
+      "knowledge_points": ["跳段运行", "程序跳段", "跳段符"],
+      "core_exam_points": ["知道跳段符和跳段按键必须配合"]
+    },
+    {
+      "question_id": "q_3_7_004",
+      "type": "short_answer",
+      "stem": "M00 和 M01 的区别是什么？",
+      "reference_answer": "M00 执行到就停止，M01 只有选择停有效时才停止。",
+      "explanation": "M01 是选择停止，是否停取决于操作面板上的选择停状态。",
+      "difficulty": "normal",
+      "knowledge_points": ["M00", "M01", "选择停止"],
+      "core_exam_points": ["能区分无条件停止和选择停止"]
+    },
+    {
+      "question_id": "q_3_7_005",
+      "type": "short_answer",
+      "stem": "加工中只是想临时观察刀路，应优先使用进给保持还是急停？",
+      "reference_answer": "优先使用进给保持。",
+      "explanation": "进给保持用于临时暂停观察，急停用于危险或紧急情况。",
+      "difficulty": "normal",
+      "knowledge_points": ["进给保持", "急停", "运行暂停"],
+      "core_exam_points": ["会区分暂停观察和紧急停止"]
+    },
+    {
+      "question_id": "q_3_7_006",
+      "type": "short_answer",
+      "stem": "螺纹加工过程中按进给保持，会立即停止吗？",
+      "reference_answer": "不会立即生效，要等螺纹指令运行完成。",
+      "explanation": "源资料特别提醒螺纹加工时进给保持不能立即生效，这是安全控制中的易错点。",
+      "difficulty": "normal",
+      "knowledge_points": ["螺纹加工", "进给保持", "暂停运行"],
+      "core_exam_points": ["记住螺纹加工中进给保持的特殊性"]
+    },
+    {
+      "question_id": "q_3_7_007",
+      "type": "short_answer",
+      "stem": "任意行运行为什么不能理解成从中间随便开始运行？",
+      "reference_answer": "因为目标行之前的模态、轴到位顺序和程序上下文会影响后续动作。",
+      "explanation": "任意行运行需要考虑扫描模式和程序上下文，否则可能出现动作错误。",
+      "difficulty": "hard",
+      "knowledge_points": ["任意行运行", "模态继承", "轴到位顺序"],
+      "core_exam_points": ["理解任意行运行的风险和前提"]
+    },
+    {
+      "question_id": "q_3_7_008",
+      "type": "short_answer",
+      "stem": "终止运行的一般处理顺序是什么？",
+      "reference_answer": "先按进给保持暂停，再切到手动，关闭 MST 功能，最后按急停终止并复位。",
+      "explanation": "终止运行比普通暂停更彻底，需要按顺序处理运动和辅助功能。",
+      "difficulty": "hard",
+      "knowledge_points": ["终止运行", "MST 功能", "急停复位"],
+      "core_exam_points": ["掌握终止运行的安全顺序"]
+    }
+  ]
+}

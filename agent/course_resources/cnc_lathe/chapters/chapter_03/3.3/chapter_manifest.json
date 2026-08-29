@@ -1,0 +1,45 @@
+{
+  "chapter_id": "3.3",
+  "chapter_group_id": "chapter_03",
+  "title": "对刀及加工设置",
+  "lecture": {
+    "manual_lecture": "对刀及加工设置.md"
+  },
+  "reference_quiz": {
+    "questions": "reference_quiz/questions.json"
+  },
+  "focus_source": "对刀及加工设置.重点.json",
+  "focus": {
+    "summary": "本章围绕刀补表的直接输入、试切对刀和刀架整体平移展开，重点是让新人理解刀具偏置、工件基准和对刀值回填之间的关系。",
+    "required_material_types": [
+      "lecture",
+      "quiz"
+    ],
+    "focus_items": [
+      {
+        "id": "cnc_lathe.3.3.lecture",
+        "name": "对刀及加工设置讲义",
+        "category": "lecture",
+        "rag_keywords": [
+          "刀补表",
+          "直接输入刀补值",
+          "试切对刀",
+          "X轴偏置",
+          "Z轴偏置"
+        ]
+      },
+      {
+        "id": "cnc_lathe.3.3.quiz",
+        "name": "对刀及加工设置测试题",
+        "category": "quiz",
+        "rag_keywords": [
+          "磨损值",
+          "刀尖半径",
+          "试切长度",
+          "试切外径",
+          "刀架整体平移"
+        ]
+      }
+    ]
+  }
+}

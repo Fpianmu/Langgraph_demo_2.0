@@ -1,0 +1,86 @@
+{
+  "chapter_id": "1.2",
+  "source_file": "数控机床组成工作原理与特点.重点.json",
+  "questions": [
+    {
+      "question_id": "q_1_2_001",
+      "type": "short_answer",
+      "stem": "数控机床通常由哪些基本部分组成？",
+      "reference_answer": "由控制介质、计算机数控装置、伺服驱动系统、辅助控制装置和机床本体等部分组成。",
+      "explanation": "这五部分构成从加工程序输入到机床执行加工的完整链路。",
+      "difficulty": "easy",
+      "knowledge_points": ["数控机床组成", "控制介质", "CNC"],
+      "core_exam_points": ["能说出数控机床的主要组成"]
+    },
+    {
+      "question_id": "q_1_2_002",
+      "type": "short_answer",
+      "stem": "计算机数控装置在数控机床中起什么作用？",
+      "reference_answer": "接收加工程序，进行识别、译码和运算，并输出运动指令和控制指令。",
+      "explanation": "CNC 是数控机床的控制中枢，负责把程序转化为可执行的控制命令。",
+      "difficulty": "easy",
+      "knowledge_points": ["计算机数控装置", "译码", "控制指令"],
+      "core_exam_points": ["理解 CNC 的中枢作用"]
+    },
+    {
+      "question_id": "q_1_2_003",
+      "type": "short_answer",
+      "stem": "控制 X 轴、Z 轴移动方向、速度和距离，属于运动控制还是逻辑控制？",
+      "reference_answer": "属于运动控制。",
+      "explanation": "坐标轴的位置、方向、速度和轨迹都属于运动控制范围。",
+      "difficulty": "easy",
+      "knowledge_points": ["运动控制", "坐标轴", "进给运动"],
+      "core_exam_points": ["能区分运动控制对象"]
+    },
+    {
+      "question_id": "q_1_2_004",
+      "type": "short_answer",
+      "stem": "主轴启停、冷却液开关、润滑启停通常属于哪类控制？",
+      "reference_answer": "属于逻辑控制或辅助控制。",
+      "explanation": "这些动作主要是开关量和顺序动作，通常由电气控制系统或 PLC 配合完成。",
+      "difficulty": "easy",
+      "knowledge_points": ["逻辑控制", "PLC", "辅助控制"],
+      "core_exam_points": ["能区分逻辑控制对象"]
+    },
+    {
+      "question_id": "q_1_2_005",
+      "type": "short_answer",
+      "stem": "伺服驱动系统的主要作用是什么？",
+      "reference_answer": "把来自数控装置的运动指令放大，驱动机床移动部件按规定轨迹移动或准确定位。",
+      "explanation": "伺服系统连接 CNC 指令和机床运动，其性能会影响加工精度和生产效率。",
+      "difficulty": "normal",
+      "knowledge_points": ["伺服驱动系统", "运动指令", "定位精度"],
+      "core_exam_points": ["理解伺服系统与加工精度的关系"]
+    },
+    {
+      "question_id": "q_1_2_006",
+      "type": "short_answer",
+      "stem": "带反馈系统的数控机床为什么能提高加工精度？",
+      "reference_answer": "因为反馈系统能检测实际位置和速度，并反馈给数控装置进行比较和修正。",
+      "explanation": "反馈让系统知道实际运动是否与指令一致，便于修正偏差。",
+      "difficulty": "normal",
+      "knowledge_points": ["反馈系统", "位置检测", "精度修正"],
+      "core_exam_points": ["知道反馈系统的作用"]
+    },
+    {
+      "question_id": "q_1_2_007",
+      "type": "short_answer",
+      "stem": "为什么数控机床适合单件、小批量复杂零件加工？",
+      "reference_answer": "因为更换加工对象时主要通过更换或修改程序实现，适应性强，减少专用夹具和反复调整。",
+      "explanation": "数控机床的柔性来自程序控制，能较快适应不同零件。",
+      "difficulty": "normal",
+      "knowledge_points": ["适应性强", "小批量生产", "程序控制"],
+      "core_exam_points": ["理解数控机床适用场景"]
+    },
+    {
+      "question_id": "q_1_2_008",
+      "type": "short_answer",
+      "stem": "数控机床加工精度高的原因可以从哪些方面理解？",
+      "reference_answer": "可以从机床刚度和热稳定性较好、进给传动精度高、可进行误差补偿、自动加工减少人为误差等方面理解。",
+      "explanation": "加工精度不是单靠程序实现，而是机械结构、驱动系统和控制补偿共同作用的结果。",
+      "difficulty": "normal",
+      "knowledge_points": ["加工精度", "误差补偿", "自动加工"],
+      "core_exam_points": ["能综合说明数控机床精度优势"]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "chapter_id": "1.1",
+  "chapter_group_id": "chapter_01",
+  "title": "数控车床基础认知",
+  "lecture": {
+    "manual_lecture": "数控车床基础认知.md"
+  },
+  "reference_quiz": {
+    "questions": "reference_quiz/questions.json"
+  },
+  "focus_source": "数控车床基础认知.重点.json",
+  "focus": {
+    "summary": "本章重点是建立数控车床基础认知：理解数控车床的定义、适用加工对象、基本组成、常见布局、关键部件作用，以及影响加工精度和异常排查的基础因素。",
+    "required_material_types": [
+      "lecture",
+      "quiz"
+    ],
+    "focus_items": [
+      {
+        "id": "cnc_lathe.1.1.lecture",
+        "name": "数控车床基础认知讲义",
+        "category": "lecture",
+        "rag_keywords": [
+          "数控车床是什么",
+          "数控车床能加工哪些零件",
+          "数控车床由哪些部分组成",
+          "数控车床床身布局有哪些",
+          "主轴 刀架 卡盘 进给系统分别有什么作用"
+        ]
+      },
+      {
+        "id": "cnc_lathe.1.1.quiz",
+        "name": "数控车床基础认知测试题",
+        "category": "quiz",
+        "rag_keywords": [
+          "数控车床基础认知练习题",
+          "数控车床适用零件判断题",
+          "CK6140 型号含义题",
+          "床身布局和刀架位置例题",
+          "数控车床加工异常排查题"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "chapter_id": "5.1",
+  "chapter_group_id": "chapter_05",
+  "title": "上机操作与结果审查",
+  "required_material_types": [
+    "lecture",
+    "practice",
+    "quiz"
+  ],
+  "lecture": {
+    "manual_lecture": "lecture/manual_lecture.md"
+  },
+  "reference_quiz": {
+    "questions": "reference_quiz/questions.json"
+  },
+  "quiz_policy": {
+    "mode": "select_from_bank",
+    "question_count": 6
+  },
+  "focus": {
+    "summary": "上机加工提交、测量参数上传与结果审查",
+    "required_material_types": [
+      "lecture",
+      "practice",
+      "quiz"
+    ],
+    "focus_items": [
+      {
+        "id": "cnc_lathe.5.1.quiz",
+        "name": "上机操作结果审查测试题",
+        "description": "围绕工件照片、测量参数、标准参数比对和结果判定选择题目。",
+        "priority": "high",
+        "category": "quiz",
+        "rag_keywords": [
+          "上机加工结果审查",
+          "工件照片和测量参数上传",
+          "标准参数比对和合格判定"
+        ]
+      }
+    ]
+  }
+}

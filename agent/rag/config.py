@@ -16,9 +16,11 @@ class RagConfig:
     index_dir: Path
     manifest_dir: Path
     additional_source_dirs: tuple[Path, ...] = ()
-    top_k: int = 5
+    top_k: int = 8
     min_score: float = 0.05
-    max_pdf_pages: int = 8
+    # A value <= 0 means that every page is indexed.  The local corpus contains
+    # long manuals whose useful chapters often start well after page 30.
+    max_pdf_pages: int = 0
     deepseek_model: str = "deepseek-v4-flash"
 
     @classmethod
@@ -31,9 +33,9 @@ class RagConfig:
             index_dir=Path(os.getenv("RAG_INDEX_DIR", local_kb_root / "indexes")),
             manifest_dir=Path(os.getenv("RAG_MANIFEST_DIR", local_kb_root / "manifests")),
             additional_source_dirs=_additional_source_dirs(source_dir),
-            top_k=int(os.getenv("RAG_TOP_K", "5")),
+            top_k=int(os.getenv("RAG_TOP_K", "8")),
             min_score=float(os.getenv("RAG_MIN_SCORE", "0.05")),
-            max_pdf_pages=int(os.getenv("RAG_MAX_PDF_PAGES", "8")),
+            max_pdf_pages=int(os.getenv("RAG_MAX_PDF_PAGES", "0")),
             deepseek_model=os.getenv("DEEPSEEK_LLM_MODEL", "deepseek-v4-flash"),
         )
 
@@ -46,6 +48,9 @@ def _additional_source_dirs(source_dir: Path) -> tuple[Path, ...]:
     candidates = [
         *_parse_path_list(os.getenv("RAG_ADDITIONAL_SOURCE_DIRS", "")),
         Path(__file__).resolve().parents[3] / "resource",
+        # When the backend lives in <Desktop>/多agent协作_demo/backend, the
+        # user's existing knowledge corpus is the sibling <Desktop>/resource.
+        Path(__file__).resolve().parents[4] / "resource",
     ]
     result: list[Path] = []
     seen = {source_dir.resolve() if source_dir.exists() else source_dir}

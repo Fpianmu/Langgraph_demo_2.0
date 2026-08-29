@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
+from threading import RLock, Thread
 from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse, StreamingResponse
 
 try:
     from sse_starlette.sse import EventSourceResponse as _SseEventSourceResponse
@@ -37,10 +40,15 @@ from agent.api_storage import (
     scores_payload,
     storage_file_url,
 )
+from agent.course_resources.stage_loader import load_course_stages
 from agent.observability.runner import stream_graph_agent_events
 from agent.observability.sse import format_sse_event
 from agent.onboarding_api import register_onboarding_routes
 from agent.storage_layout import resolve_storage_root
+from agent.frontend_state import (
+    load_frontend_workspace_state,
+    save_frontend_workspace_state,
+)
 from agent.tools.profile_tools import apply_profile_update_suggestions
 from agent.tools.learning_recommendation_tools import (
     load_learning_recommendations,
@@ -55,6 +63,7 @@ from agent.tools.quiz_grading_tools import (
     grade_saved_quiz_answer,
     submit_quiz_answers,
 )
+from agent.tools.quiz_profile_sync_tools import sync_quiz_profile_evidence
 
 
 @dataclass
@@ -64,19 +73,28 @@ class RunRecord:
     status: str = "created"
     cancel_requested: bool = False
     events: list[dict[str, Any]] = field(default_factory=list)
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    lock: RLock = field(default_factory=RLock, repr=False)
 
 
 app = FastAPI(title="LangGraph Demo 2.0 Agent Events")
 register_onboarding_routes(app)
 RUNS: dict[str, RunRecord] = {}
+REQUEST_RUNS: dict[str, str] = {}
 
 
 @app.get("/api/agent/health")
 def agent_health() -> dict[str, Any]:
+    rag_config = _rag_health()
     return {
-        "status": "ok",
+        "status": "ok" if graph is not None else "degraded",
         "service": "LangGraph Demo 2.0",
         "storage_root": str(resolve_storage_root(None)),
+        "graph_available": graph is not None,
+        "graph_error": str(GRAPH_IMPORT_ERROR) if GRAPH_IMPORT_ERROR else None,
+        "model_configured": bool(_deepseek_api_key()),
+        **rag_config,
     }
 
 
@@ -102,8 +120,19 @@ def _event_source_response(generator: Any) -> Any:
 @app.post("/api/graph/runs")
 @app.post("/api/runs")
 def create_run(payload: dict[str, Any]) -> dict[str, str]:
+    if graph is None:
+        raise HTTPException(status_code=503, detail=f"graph unavailable: {GRAPH_IMPORT_ERROR}")
+    request_id = str(payload.get("request_id") or "").strip()
+    if request_id:
+        existing_id = REQUEST_RUNS.get(request_id)
+        existing = RUNS.get(existing_id or "")
+        if existing is not None:
+            return {"run_id": existing.run_id, "status": existing.status}
     run_id = f"run_{uuid4().hex[:12]}"
     RUNS[run_id] = RunRecord(run_id=run_id, payload=dict(payload))
+    if request_id:
+        REQUEST_RUNS[request_id] = run_id
+    Thread(target=_execute_run, args=(run_id,), name=f"zlink-{run_id}", daemon=True).start()
     return {"run_id": run_id, "status": "created"}
 
 
@@ -113,7 +142,35 @@ def get_run(run_id: str) -> dict[str, Any]:
     record = RUNS.get(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="run not found")
-    return {"run_id": record.run_id, "status": record.status, "event_count": len(record.events)}
+    with record.lock:
+        return {
+            "run_id": record.run_id,
+            "status": record.status,
+            "event_count": len(record.events),
+            "result_url": f"/api/graph/runs/{run_id}/result" if record.status == "completed" else None,
+            "error": record.error,
+        }
+
+
+@app.get("/api/graph/runs/{run_id}/result")
+@app.get("/api/runs/{run_id}/result")
+def get_run_result(run_id: str) -> Any:
+    record = RUNS.get(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    with record.lock:
+        if record.status == "failed":
+            raise HTTPException(status_code=500, detail=record.error or "graph run failed")
+        if record.status == "cancelled":
+            raise HTTPException(status_code=409, detail="graph run was cancelled")
+        if record.status != "completed" or record.result is None:
+            return JSONResponse(
+                status_code=202,
+                content={"run_id": run_id, "status": record.status},
+            )
+        result = dict(record.result)
+        result["agent_trace"] = _agent_trace(record.events)
+        return {"run_id": run_id, "status": "completed", "result": result}
 
 
 @app.post("/api/graph/runs/{run_id}/cancel")
@@ -130,32 +187,64 @@ def cancel_run(run_id: str) -> dict[str, str]:
 @app.get("/api/agents/runs/{run_id}/events")
 @app.get("/api/graph/runs/{run_id}/events")
 @app.get("/api/runs/{run_id}/events")
-def stream_run_events(run_id: str) -> Any:
+def stream_run_events(run_id: str, request: Request) -> Any:
     record = RUNS.get(run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="run not found")
-    if graph is None:
-        raise HTTPException(status_code=503, detail=f"graph unavailable: {GRAPH_IMPORT_ERROR}")
-
     async def generate():
-        if record.status == "cancelled":
-            return
-        record.status = "running"
-        try:
-            for event in stream_graph_agent_events(graph, record.payload, run_id=run_id):
-                if record.cancel_requested:
-                    record.status = "cancelled"
-                    return
-                record.events.append(event)
+        index = _event_index(request.headers.get("last-event-id"))
+        while True:
+            if await request.is_disconnected():
+                return
+            with record.lock:
+                pending = list(record.events[index:])
+                status = record.status
+            for event in pending:
+                index += 1
                 yield {
                     "id": event["event_id"],
                     "event": event["event_type"],
                     "data": event,
                 }
-            if record.status != "cancelled":
-                record.status = "completed"
-        except Exception as exc:
+            if status in {"completed", "failed", "cancelled"} and not pending:
+                return
+            await asyncio.sleep(0.1)
+
+    return _event_source_response(generate())
+
+
+def _execute_run(run_id: str) -> None:
+    record = RUNS[run_id]
+    with record.lock:
+        if record.status != "created":
+            return
+        record.status = "running"
+
+    final_state: dict[str, Any] = {}
+
+    def store_result(state: dict[str, Any]) -> None:
+        nonlocal final_state
+        final_state = dict(state)
+
+    try:
+        for event in stream_graph_agent_events(
+            graph,
+            record.payload,
+            run_id=run_id,
+            on_result=store_result,
+        ):
+            with record.lock:
+                if record.cancel_requested:
+                    record.status = "cancelled"
+                    return
+                record.events.append(event)
+        with record.lock:
+            record.result = _normalize_graph_result(final_state, record.payload, run_id)
+            record.status = "completed"
+    except Exception as exc:
+        with record.lock:
             record.status = "failed"
+            record.error = str(exc)
             failure = {
                 "event_type": "run.failed",
                 "event_id": f"evt_failed_{len(record.events) + 1:06d}",
@@ -163,14 +252,101 @@ def stream_run_events(run_id: str) -> Any:
                 "detail": str(exc),
             }
             record.events.append(failure)
-            yield {"id": failure["event_id"], "event": failure["event_type"], "data": failure}
 
-    return _event_source_response(generate())
+
+def _normalize_graph_result(state: dict[str, Any], payload: dict[str, Any], run_id: str) -> dict[str, Any]:
+    final_output = state.get("verified_output") or state.get("final_output") or state.get("personalized_output")
+    final_materials = state.get("verified_materials") or state.get("final_materials") or {}
+    if not final_output and isinstance(final_materials, dict) and len(final_materials) == 1:
+        final_output = next(iter(final_materials.values()))
+    status = "success"
+    verification_decision = str(state.get("verification_decision") or "")
+    if verification_decision in {"safe_reject", "safe_reject_node"} or state.get("safe_reject_reason"):
+        status = "content_rejected"
+    result = {
+        "api_version": "v2",
+        "request_id": str(state.get("request_id") or payload.get("request_id") or ""),
+        "run_id": run_id,
+        "status": status,
+        "content_type": str(state.get("content_type") or payload.get("content_type") or "qa"),
+        "task": str(state.get("task") or payload.get("task") or payload.get("raw_prompt") or ""),
+        "final_output": final_output if isinstance(final_output, dict) else None,
+        "final_materials": final_materials if isinstance(final_materials, dict) else {},
+        "rag_package": state.get("rag_package") if isinstance(state.get("rag_package"), dict) else None,
+        "check_report": state.get("verification_summary") if isinstance(state.get("verification_summary"), dict) else None,
+        "safety_report": state.get("safety_report") if isinstance(state.get("safety_report"), dict) else None,
+        "profile_update_suggestions": state.get("profile_update_suggestions") if isinstance(state.get("profile_update_suggestions"), dict) else {},
+        "saved_outputs": state.get("saved_outputs") if isinstance(state.get("saved_outputs"), dict) else {},
+        "qa_session_id": str(state.get("qa_session_id") or payload.get("qa_session_id") or "") or None,
+        "error_type": "verification_rejected" if status == "content_rejected" else None,
+        "retry_count": int(state.get("retry_count") or state.get("verification_rewrite_count") or 0),
+    }
+    for key in (
+        "personalized_qa_output",
+        "personalized_question_output",
+        "personalized_lecture_output",
+        "final_qa_output",
+        "final_question_output",
+        "final_lecture_output",
+        "lecture_artifact_paths",
+        "saved_lecture_artifact",
+        "profile_update_result",
+        "learning_recommendations",
+    ):
+        value = state.get(key)
+        if value is not None:
+            result[key] = value
+    return jsonable_encoder(result)
+
+
+def _agent_trace(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    trace = []
+    for event in events:
+        if event.get("event_type") != "agent.activity":
+            continue
+        trace.append(
+            {
+                "node": str(event.get("node_id") or event.get("agent_id") or "agent"),
+                "status": "success",
+                "summary": str(event.get("display_text") or event.get("detail") or ""),
+            }
+        )
+    return trace
+
+
+def _event_index(last_event_id: str | None) -> int:
+    if not last_event_id:
+        return 0
+    try:
+        return max(int(str(last_event_id).rsplit("_", 1)[-1]), 0)
+    except ValueError:
+        return 0
+
+
+def _deepseek_api_key() -> str:
+    import os
+
+    return os.getenv("DEEPSEEK_API_KEY", "").strip()
+
+
+def _rag_health() -> dict[str, Any]:
+    try:
+        from agent.rag.config import RagConfig
+
+        config = RagConfig.from_env()
+        source_ready = any(path.is_dir() for path in (config.source_dir, *config.additional_source_dirs))
+        index_ready = (config.index_dir / "docstore.json").is_file()
+        return {
+            "rag_ready": source_ready or index_ready,
+            "rag_source_ready": source_ready,
+            "rag_index_ready": index_ready,
+        }
+    except Exception:
+        return {"rag_ready": False, "rag_source_ready": False, "rag_index_ready": False}
 
 
 @app.get("/api/storage/users/{user_id}/profile")
 @app.get("/api/profile/{user_id}")
-@app.get("/api/state/{user_id}")
 def get_profile(user_id: str, storage_root: str | None = None, display_name: str | None = None, background_type: str | None = None) -> dict[str, Any]:
     return profile_payload(
         user_id=user_id,
@@ -182,7 +358,6 @@ def get_profile(user_id: str, storage_root: str | None = None, display_name: str
 
 @app.put("/api/storage/users/{user_id}/profile")
 @app.put("/api/profile/{user_id}")
-@app.put("/api/state/{user_id}")
 def update_profile(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     storage_root = payload.get("storage_root")
     request_id = str(payload.get("request_id") or f"req_{uuid4().hex[:12]}")
@@ -198,6 +373,22 @@ def update_profile(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         request_id=request_id,
         suggestions=suggestions,
         storage_root=storage_root,
+    )
+
+
+@app.get("/api/frontend-state/{user_id}")
+@app.get("/api/state/{user_id}")
+def get_frontend_state(user_id: str, storage_root: str | None = None) -> dict[str, Any]:
+    return load_frontend_workspace_state(user_id=user_id, storage_root=storage_root)
+
+
+@app.put("/api/frontend-state/{user_id}")
+@app.put("/api/state/{user_id}")
+def update_frontend_state(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return save_frontend_workspace_state(
+        user_id=user_id,
+        payload=payload,
+        storage_root=payload.get("storage_root"),
     )
 
 
@@ -235,6 +426,18 @@ def get_resource_difficulty_trace(
 @app.get("/api/storage/users/{user_id}/path-assignments")
 def get_path_assignments(user_id: str, storage_root: str | None = None) -> dict[str, Any]:
     return path_assignments_payload(user_id=user_id, storage_root=storage_root)
+
+
+@app.get("/api/courses/{course_id}/learning-path")
+def get_course_learning_path(
+    course_id: str,
+    path_id: str | None = None,
+) -> dict[str, Any]:
+    """Return the ordered, backend-owned chapter tree for one learning path."""
+    try:
+        return load_course_stages(course_id, path_id=path_id)
+    except (FileNotFoundError, KeyError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
 
 
 @app.get("/api/storage/users/{user_id}/recommendations")
@@ -322,6 +525,27 @@ def submit_quiz_answers_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
 @app.post("/api/quiz-submit")
 def submit_quiz_answers_compat_endpoint(payload: dict[str, Any]) -> dict[str, Any]:
     return _submit_quiz_payload(payload)
+
+
+@app.post("/api/storage/users/{user_id}/quiz-evidence")
+def sync_quiz_profile_evidence_endpoint(
+    user_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    evidence = payload.get("capability_evidence")
+    if not isinstance(evidence, list) or not evidence:
+        raise HTTPException(status_code=400, detail="capability_evidence is required")
+    request_id = str(payload.get("request_id") or f"quiz_sync_{uuid4().hex[:12]}")
+    try:
+        return sync_quiz_profile_evidence(
+            user_id=user_id,
+            course_id=str(payload.get("course_id") or "cnc_lathe"),
+            evidence=[item for item in evidence if isinstance(item, dict)],
+            request_id=request_id,
+            storage_root=payload.get("storage_root"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 @app.get("/api/users/{user_id}/learning-recommendations")

@@ -1,0 +1,48 @@
+{
+  "chapter_id": "4.1",
+  "chapter_group_id": "chapter_04",
+  "title": "代码线上练习与仿真",
+  "required_material_types": [
+    "lecture",
+    "practice",
+    "quiz"
+  ],
+  "lecture": {
+    "manual_lecture": "lecture/manual_lecture.md"
+  },
+  "reference_quiz": {
+    "questions": "reference_quiz/questions.json"
+  },
+  "quiz_policy": {
+    "mode": "select_from_bank",
+    "question_count": 6
+  },
+  "focus": {
+    "summary": "CNC 程序线上练习与仿真验证",
+    "required_material_types": [
+      "lecture",
+      "practice",
+      "quiz"
+    ],
+    "focus_items": [
+      {
+        "id": "cnc_lathe.4.1.quiz",
+        "name": "CNC 程序仿真测试题",
+        "description": "围绕程序结构、坐标设定、刀具补偿、仿真验证和安全检查选择题目。",
+        "priority": "high",
+        "category": "quiz",
+        "rag_keywords": [
+          "CNC 程序结构与仿真验证",
+          "数控车床 G 代码和 M 代码检查",
+          "仿真中刀具路径和安全风险判断"
+        ]
+      }
+    ]
+  },
+  "simulation_tasks": [
+    {
+      "task_id": "task_001",
+      "path": "simulation_tasks/task_001/task_manifest.json"
+    }
+  ]
+}

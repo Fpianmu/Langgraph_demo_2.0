@@ -332,10 +332,34 @@ class ProfileRepository:
                     :resource_difficulty, :difficulty_delta, :alignment_score, :source_node, :resource_meta_json,
                     datetime('now')
                 )
+                ON CONFLICT(record_id) DO UPDATE SET
+                    profile_score=excluded.profile_score,
+                    resource_difficulty=excluded.resource_difficulty,
+                    difficulty_delta=excluded.difficulty_delta,
+                    alignment_score=excluded.alignment_score,
+                    source_node=excluded.source_node,
+                    resource_meta_json=excluded.resource_meta_json
                 """,
                 values,
             )
         return values
+
+    def list_generated_resources(self, user_id: str) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT artifact_id, artifact_type, title, course_id, chapter_id,
+                           source_node, metadata_json, created_at
+                    FROM generated_artifacts
+                    WHERE user_id = ? AND artifact_type IN ('lecture', 'practice', 'practice_guide', 'quiz')
+                    ORDER BY created_at ASC
+                    """,
+                    (user_id,),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                return []
+        return [dict(row) for row in rows]
 
     def list_resource_difficulty_records(self, user_id: str, *, limit: int = 200) -> list[dict[str, Any]]:
         with self._connect() as conn:

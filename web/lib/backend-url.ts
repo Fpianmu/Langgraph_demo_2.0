@@ -6,10 +6,5 @@ export function agentBackendUrl(pathname: string): string {
     return new URL(pathname, `${configuredBase.replace(/\/$/, "")}/`).toString();
   }
 
-  const configuredGenerateUrl = process.env.AGENT_API_URL?.trim();
-  if (configuredGenerateUrl) {
-    return new URL(pathname, new URL(configuredGenerateUrl).origin).toString();
-  }
-
   return new URL(pathname, `${DEFAULT_AGENT_BASE_URL}/`).toString();
 }

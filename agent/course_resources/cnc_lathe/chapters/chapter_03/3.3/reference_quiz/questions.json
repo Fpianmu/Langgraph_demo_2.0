@@ -1,0 +1,86 @@
+{
+  "chapter_id": "3.3",
+  "source_file": "对刀及加工设置.重点.json",
+  "questions": [
+    {
+      "question_id": "q_3_3_001",
+      "type": "short_answer",
+      "stem": "数控车床对刀的本质是什么？",
+      "reference_answer": "建立刀具坐标和工件坐标之间的关系。",
+      "explanation": "对刀不是单纯记数值，而是把刀和工件的基准对齐。",
+      "difficulty": "easy",
+      "knowledge_points": ["对刀", "刀具坐标", "工件坐标"],
+      "core_exam_points": ["理解对刀的基本目的"]
+    },
+    {
+      "question_id": "q_3_3_002",
+      "type": "short_answer",
+      "stem": "直接输入刀补值时，常见可输入哪些内容？",
+      "reference_answer": "偏置值、磨损值、刀尖半径、刀尖方位号。",
+      "explanation": "这些项目共同描述刀具在机床中的实际工作状态。",
+      "difficulty": "easy",
+      "knowledge_points": ["刀补表", "偏置值", "磨损值", "刀尖半径", "刀尖方位号"],
+      "core_exam_points": ["会识别刀补表常见字段"]
+    },
+    {
+      "question_id": "q_3_3_003",
+      "type": "short_answer",
+      "stem": "直接输入刀补值时，原有的什么值不会自动清除？",
+      "reference_answer": "原有磨损值不会自动清除。",
+      "explanation": "直接输入和磨损修正是不同层面的数据，输入时不会把历史磨损量清掉。",
+      "difficulty": "normal",
+      "knowledge_points": ["直接输入刀补值", "磨损值"],
+      "core_exam_points": ["知道直接输入不会清除磨损值"]
+    },
+    {
+      "question_id": "q_3_3_004",
+      "type": "short_answer",
+      "stem": "试切外径后，通常先处理哪一个方向的刀补？",
+      "reference_answer": "X 轴刀补。",
+      "explanation": "外径尺寸直接对应 X 方向位置。",
+      "difficulty": "easy",
+      "knowledge_points": ["试切对刀", "X轴偏置", "外径测量"],
+      "core_exam_points": ["会把试切外径和 X 轴对上"]
+    },
+    {
+      "question_id": "q_3_3_005",
+      "type": "short_answer",
+      "stem": "试切长度后，通常先处理哪一个方向的刀补？",
+      "reference_answer": "Z 轴刀补。",
+      "explanation": "长度方向主要对应 Z 轴位置。",
+      "difficulty": "easy",
+      "knowledge_points": ["试切对刀", "Z轴偏置", "长度测量"],
+      "core_exam_points": ["会把试切长度和 Z 轴对上"]
+    },
+    {
+      "question_id": "q_3_3_006",
+      "type": "short_answer",
+      "stem": "为什么试切后要先沿另一轴退出再测量？",
+      "reference_answer": "为了腾出测量空间，避免刀具继续接触工件影响测量和安全。",
+      "explanation": "先退刀，再测量，这是试切对刀的基本习惯。",
+      "difficulty": "normal",
+      "knowledge_points": ["试切流程", "退刀", "安全测量"],
+      "core_exam_points": ["知道试切后要先退出再测量"]
+    },
+    {
+      "question_id": "q_3_3_007",
+      "type": "short_answer",
+      "stem": "刀架整体平移通常用来做什么？",
+      "reference_answer": "对整组刀具的参考位置做统一修正。",
+      "explanation": "它不是单把刀的微调，而是整组刀具的统一平移。",
+      "difficulty": "normal",
+      "knowledge_points": ["刀架整体平移", "统一修正", "刀补基准"],
+      "core_exam_points": ["知道整体平移的用途"]
+    },
+    {
+      "question_id": "q_3_3_008",
+      "type": "short_answer",
+      "stem": "进行刀架整体平移前，机床应该处于什么状态？",
+      "reference_answer": "停止运行状态。",
+      "explanation": "源资料明确要求机床必须先停止运行，再进行这类处理。",
+      "difficulty": "easy",
+      "knowledge_points": ["刀架整体平移", "停止运行", "加工设置"],
+      "core_exam_points": ["知道刀架整体平移的前提条件"]
+    }
+  ]
+}

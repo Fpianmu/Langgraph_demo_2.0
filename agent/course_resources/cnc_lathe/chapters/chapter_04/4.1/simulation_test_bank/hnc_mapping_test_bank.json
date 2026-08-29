@@ -1,0 +1,40 @@
+{
+  "bank_id": "hnc_mapping_test_bank_v1",
+  "course_id": "cnc_lathe",
+  "chapter_id": "4.1",
+  "source_rules": [
+    "rules/hnc/hnc_instruction_table.md",
+    "rules/hnc/hnc_gcode_mapping.md",
+    "rules/hnc/hnc_programming_rules.md"
+  ],
+  "purpose": "用于验证华中数控代码到标准 G 代码语义转换、CNCjs 仿真任务创建、原码检查和 DeepSeek 反馈链路。",
+  "items": [
+    {
+      "item_id": "hnc_map_001_pass_outer_turning",
+      "title": "外圆直线加工基本程序",
+      "expected_result": "pass",
+      "covered_mapping": ["G00->G0", "G01->G1", "M03/M05/M30", "T/S/F"],
+      "student_code": "G00 X50 Z5\nT0101\nS800 M03\nG01 X24 Z0 F0.2\nG01 X24 Z-30 F0.2\nG00 X80 Z80\nM05\nM30\n",
+      "expected_standard_gcode_contains": ["G0 X50 Z5", "G1 X24 Z0 F0.2", "M30"],
+      "expected_feedback_focus": ["程序可运行", "尺寸路径", "安全退刀"]
+    },
+    {
+      "item_id": "hnc_map_002_missing_end",
+      "title": "缺少程序结束指令",
+      "expected_result": "fail",
+      "covered_mapping": ["G00->G0", "G01->G1", "M30 missing"],
+      "student_code": "G00 X50 Z5\nG01 X24 Z0 F0.2\nG01 X24 Z-30 F0.2\nG00 X80 Z80\n",
+      "expected_diagnostics": ["MISSING_PROGRAM_END"],
+      "expected_feedback_focus": ["缺少 M30 或 M2", "补充程序结束段"]
+    },
+    {
+      "item_id": "hnc_map_003_arc_and_unsupported_cycle",
+      "title": "圆弧加工与暂不支持循环混合",
+      "expected_result": "fail",
+      "covered_mapping": ["G02->G2", "G03->G3", "G71 unsupported"],
+      "student_code": "G00 X50 Z5\nG71 U1 R0.5\nG02 X30 Z-10 I-5 K0 F0.15\nG03 X40 Z-5 I5 K0 F0.15\nM30\n",
+      "expected_diagnostics": ["UNSUPPORTED_INSTRUCTION"],
+      "expected_feedback_focus": ["G71 暂不支持", "展开循环为普通插补路径"]
+    }
+  ]
+}

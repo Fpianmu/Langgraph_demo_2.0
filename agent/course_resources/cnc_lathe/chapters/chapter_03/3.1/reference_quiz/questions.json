@@ -1,0 +1,106 @@
+{
+  "chapter_id": "3.1",
+  "source_file": "数控系统上电关机与手动操作.重点.json",
+  "questions": [
+    {
+      "question_id": "q_3_1_001",
+      "type": "short_answer",
+      "stem": "数控车床上电前，最先要确认的安全动作是什么？",
+      "reference_answer": "先按下急停，确认机床处于安全初始状态。",
+      "explanation": "上电前先切断危险动作，可以避免误启动或状态不明时直接进入运行。",
+      "difficulty": "easy",
+      "knowledge_points": ["上电前检查", "急停", "安全初始状态"],
+      "core_exam_points": ["上电前必须先确保机床处于安全状态"]
+    },
+    {
+      "question_id": "q_3_1_002",
+      "type": "short_answer",
+      "stem": "数控车床完成上电后，第一件事通常应该观察什么？",
+      "reference_answer": "观察面板指示灯和显示状态是否正常。",
+      "explanation": "上电后需要先确认系统是否正常启动，避免带着异常继续操作。",
+      "difficulty": "easy",
+      "knowledge_points": ["上电流程", "系统指示灯", "状态确认"],
+      "core_exam_points": ["上电后要先确认系统显示和指示状态正常"]
+    },
+    {
+      "question_id": "q_3_1_003",
+      "type": "short_answer",
+      "stem": "急停按钮在数控车床上的主要作用是什么？",
+      "reference_answer": "在危险、异常或紧急情况下立即切断危险动作，先停下来再处理。",
+      "explanation": "急停是安全链路的核心，不是为了完成加工，而是为了快速消除即时风险。",
+      "difficulty": "easy",
+      "knowledge_points": ["急停", "异常处理", "安全链路"],
+      "core_exam_points": ["急停用于紧急情况下立即停止危险动作"]
+    },
+    {
+      "question_id": "q_3_1_004",
+      "type": "short_answer",
+      "stem": "机床出现超程报警后，第一步应该如何处理？",
+      "reference_answer": "切到手动或手轮方式，沿相反方向退出超程区域。",
+      "explanation": "超程属于保护状态，处理时应先退出危险区，再复位和回参考点。",
+      "difficulty": "normal",
+      "knowledge_points": ["超程保护", "手动方式", "反向退出"],
+      "core_exam_points": ["超程报警后不能强行继续运动，必须先解除危险状态"]
+    },
+    {
+      "question_id": "q_3_1_005",
+      "type": "short_answer",
+      "stem": "解除急停或超程后，为什么通常还要重新回参考点？",
+      "reference_answer": "为了重新建立机床坐标基准，保证后续位置判断正确。",
+      "explanation": "回参考点能让系统重新知道机床的基准位置，是后续加工和找位的基础。",
+      "difficulty": "normal",
+      "knowledge_points": ["回参考点", "机床坐标", "基准建立"],
+      "core_exam_points": ["异常恢复后通常需要重新回参考点"]
+    },
+    {
+      "question_id": "q_3_1_006",
+      "type": "short_answer",
+      "stem": "在 MDI 方式下，使主轴以 800 r/min 正转的指令是什么？",
+      "reference_answer": "M03 S800",
+      "explanation": "M03 表示主轴正转，S800 表示转速设为 800。",
+      "difficulty": "easy",
+      "knowledge_points": ["MDI", "主轴正转", "转速指令"],
+      "core_exam_points": ["能识别 M03 和 S 指令的基本含义"]
+    },
+    {
+      "question_id": "q_3_1_007",
+      "type": "short_answer",
+      "stem": "使用手轮进给前，需要先确认哪些设置？",
+      "reference_answer": "工作方式、目标轴和倍率档。",
+      "explanation": "手轮进给必须先明确轴向和倍率，否则容易走错位置或移动过量。",
+      "difficulty": "normal",
+      "knowledge_points": ["手轮进给", "轴选择", "倍率档"],
+      "core_exam_points": ["手轮操作前必须先设置工作方式、轴向和倍率"]
+    },
+    {
+      "question_id": "q_3_1_008",
+      "type": "short_answer",
+      "stem": "“进给保持”在自动运行中起什么作用？",
+      "reference_answer": "临时暂停刀具相对工件的进给，便于观察或处理，但不等于整机关机。",
+      "explanation": "进给保持只是暂停进给过程，主轴和系统状态通常还在，适合临时观察和干预。",
+      "difficulty": "normal",
+      "knowledge_points": ["进给保持", "自动运行", "临时暂停"],
+      "core_exam_points": ["能区分进给保持和关机的区别"]
+    },
+    {
+      "question_id": "q_3_1_009",
+      "type": "short_answer",
+      "stem": "数控车床关机时，正确的顺序大致是什么？",
+      "reference_answer": "先停止运动，再按急停，随后关闭系统电源，最后关闭机床空开。",
+      "explanation": "关机要先让机床进入安全停止状态，再切断各级电源，避免带负载断电。",
+      "difficulty": "normal",
+      "knowledge_points": ["关机顺序", "急停", "电源切断"],
+      "core_exam_points": ["关机顺序必须先停运动，再断系统电源和机床电源"]
+    },
+    {
+      "question_id": "q_3_1_010",
+      "type": "short_answer",
+      "stem": "为什么手动连续进给和手轮进给要区分开来？",
+      "reference_answer": "因为手动连续进给适合低速连续找位，手轮进给更适合细微调整和精确移动。",
+      "explanation": "不同方式适合不同精度和速度需求，混用容易造成移动过快或定位不准。",
+      "difficulty": "normal",
+      "knowledge_points": ["手动连续进给", "手轮进给", "找位"],
+      "core_exam_points": ["能区分不同手动方式的用途和场景"]
+    }
+  ]
+}
