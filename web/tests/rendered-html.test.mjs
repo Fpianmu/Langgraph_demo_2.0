@@ -197,9 +197,10 @@ test("rejects requests that do not match the v2 agent contract", async () => {
 });
 
 test("keeps the central orchestrator and Memory contracts explicit", async () => {
-  const [contract, client, route, profileRoute, profileClient, workspace] = await Promise.all([
+  const [contract, client, runClient, route, profileRoute, profileClient, workspace] = await Promise.all([
     readFile(new URL("../lib/agent-contract.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/orchestrator-client.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/graph-run-client.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/agent/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/profile/[userId]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/profile-client.ts", import.meta.url), "utf8"),
@@ -211,8 +212,8 @@ test("keeps the central orchestrator and Memory contracts explicit", async () =>
   assert.match(contract, /learner_profile:\s*LearnerProfile/);
   assert.match(client, /dispatchToCentralOrchestrator/);
   assert.match(route, /api\/graph\/runs/);
-  assert.match(client, /new EventSource/);
-  assert.match(client, /run\.completed/);
+  assert.match(runClient, /new EventSource/);
+  assert.match(runClient, /run\.completed/);
   assert.match(contract, /qa_session_id\?:\s*string/);
   assert.match(profileRoute, /api\/frontend-state/);
   assert.match(profileClient, /saveBackendProfile/);
@@ -1114,4 +1115,30 @@ test("normalizes saved lecture history and wires confirmation, persistence and R
   assert.match(lectureModel, /baselineEvidenceIds/);
   assert.match(lectureModel, /sourceRefs/);
   assert.match(lectureModel, /recommendedForNextStage/);
+});
+
+test("streams and displays the complete multi-Agent collaboration lifecycle", async () => {
+  const projectRoot = new URL("../", import.meta.url);
+  const [workspace, runClient, orchestrator, styles] = await Promise.all([
+    readFile(new URL("components/LearningWorkspace.tsx", projectRoot), "utf8"),
+    readFile(new URL("lib/graph-run-client.ts", projectRoot), "utf8"),
+    readFile(new URL("lib/orchestrator-client.ts", projectRoot), "utf8"),
+    readFile(new URL("app/globals.css", projectRoot), "utf8"),
+  ]);
+
+  assert.match(runClient, /createGraphRun/);
+  assert.match(runClient, /streamGraphRunEvents/);
+  assert.match(runClient, /agent\.activity/);
+  assert.match(runClient, /agent\.message/);
+  assert.match(runClient, /run\.completed/);
+  assert.match(runClient, /getGraphRunState/);
+  assert.match(orchestrator, /onRunCreated/);
+  assert.match(orchestrator, /onEvent/);
+  assert.match(workspace, /多 Agent 协作/);
+  assert.match(workspace, /当前运行状态/);
+  assert.match(workspace, /Agent 协作流/);
+  assert.match(workspace, /节点执行时间线/);
+  assert.match(workspace, /payload_refs/);
+  assert.match(styles, /\.handoff-item/);
+  assert.match(styles, /\.event-payload-list/);
 });

@@ -1878,7 +1878,7 @@ textarea:focus-visible {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 292px minmax(0, 1fr);
   height: 100dvh;
 }
 
@@ -3112,11 +3112,11 @@ textarea:focus-visible {
 }
 
 .sidebar-agent-activity .activity-header h3 {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .sidebar-agent-activity .activity-header p {
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .sidebar-agent-activity .trace-item {
@@ -3124,11 +3124,11 @@ textarea:focus-visible {
 }
 
 .sidebar-agent-activity .trace-copy strong {
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .sidebar-agent-activity .trace-copy p {
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.45;
 }
 
@@ -3348,6 +3348,226 @@ textarea:focus-visible {
   margin: 4px 0 0;
   color: var(--text-tertiary);
   font-size: 10px;
+}
+
+.run-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: #edf0f5;
+  font-size: 8px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.run-status-pill > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.run-status-pill.created,
+.run-status-pill.running {
+  color: #2e63dd;
+  background: #eaf0ff;
+}
+
+.run-status-pill.completed {
+  color: #15794f;
+  background: #e5f5ed;
+}
+
+.run-status-pill.failed,
+.run-status-pill.cancelled {
+  color: #b5424d;
+  background: #fdecef;
+}
+
+.agent-run-overview,
+.agent-event-section {
+  margin-top: 12px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.agent-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.agent-section-heading h4 {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 780;
+  letter-spacing: 0.035em;
+}
+
+.agent-section-heading > span {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid #edf0f5;
+  border-radius: 8px;
+  background: #edf0f5;
+}
+
+.run-overview-grid > div {
+  min-width: 0;
+  padding: 8px;
+  background: #fff;
+}
+
+.run-overview-grid small,
+.run-overview-grid strong {
+  display: block;
+}
+
+.run-overview-grid small {
+  color: var(--text-tertiary);
+  font-size: 7px;
+}
+
+.run-overview-grid strong {
+  overflow: hidden;
+  margin-top: 3px;
+  font-size: 9px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-participant-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.agent-participant-list span {
+  padding: 4px 6px;
+  border-radius: 999px;
+  color: #315da9;
+  background: #edf3ff;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.handoff-list {
+  display: grid;
+  gap: 8px;
+}
+
+.handoff-item {
+  padding: 8px;
+  border-left: 2px solid #6d91eb;
+  border-radius: 0 8px 8px 0;
+  background: #f7f9fd;
+}
+
+.handoff-route,
+.handoff-message {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.handoff-route span {
+  overflow: hidden;
+  color: #2e5dbe;
+  font-size: 7px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handoff-route b {
+  color: #91a0b8;
+  font-size: 9px;
+}
+
+.handoff-message {
+  justify-content: space-between;
+  margin-top: 5px;
+}
+
+.handoff-message strong {
+  font-size: 9px;
+}
+
+.handoff-message small {
+  color: var(--text-tertiary);
+  font-size: 7px;
+}
+
+.handoff-item > p,
+.agent-event-empty {
+  margin: 5px 0 0;
+  color: var(--text-tertiary);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.agent-event-empty {
+  padding: 6px 0;
+}
+
+.event-payload-list {
+  display: grid;
+  gap: 3px;
+  margin-top: 7px;
+}
+
+.event-payload-list span {
+  display: grid;
+  grid-template-columns: minmax(50px, auto) minmax(0, 1fr);
+  gap: 5px;
+  color: #69758a;
+  font-size: 7px;
+  line-height: 1.35;
+}
+
+.event-payload-list b {
+  color: #3e4c65;
+  font-weight: 700;
+}
+
+.live-agent-trace .trace-item {
+  min-height: 68px;
+}
+
+.trace-agent-name {
+  display: block;
+  overflow: hidden;
+  margin-bottom: 2px;
+  color: #356be7;
+  font-size: 7px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legacy-agent-trace {
+  margin-top: 12px;
 }
 
 .trace-list {

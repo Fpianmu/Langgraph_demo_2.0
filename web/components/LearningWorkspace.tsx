@@ -21,6 +21,13 @@ import {
   buildAgentRequest,
   dispatchToCentralOrchestrator,
 } from "@/lib/orchestrator-client";
+import type {
+  AgentActivityEvent,
+  AgentMessageEvent,
+  GraphPayloadRefs,
+  GraphRunEvent,
+  GraphRunStatus,
+} from "@/lib/graph-run-client";
 import {
   checkBackendHealth,
   mergeBackendProfile,
@@ -192,6 +199,33 @@ const TRACE_LABELS: Record<string, string> = {
   learning_status_router: "学情任务路由",
   feedback_node: "学情反馈与画像更新",
   progress_advance_node: "学习进度推进",
+};
+
+const AGENT_LABELS: Record<string, string> = {
+  task_dispatch: "任务调度 Agent",
+  knowledge_generation: "知识检索与生成 Agent",
+  learning_management: "学情管理 Agent",
+  personalized_generation: "个性化生成 Agent",
+  hallucination_elimination: "幻觉消除 Agent",
+  practice_evaluation: "实训评估 Agent",
+};
+
+const RUN_STATUS_LABELS: Record<GraphRunStatus, string> = {
+  idle: "等待任务",
+  created: "任务已创建",
+  running: "协作运行中",
+  completed: "运行已完成",
+  failed: "运行失败",
+  cancelled: "运行已取消",
+};
+
+const PAYLOAD_REF_LABELS: Record<string, string> = {
+  route_decision: "路由决策",
+  evidence_count: "检索证据",
+  claim_count: "待核声明",
+  artifact_paths: "生成产物",
+  verification_decision: "校验结论",
+  profile_update_summary: "画像更新",
 };
 
 const PENDING_TRACE: AgentTrace[] = [
@@ -669,6 +703,9 @@ export default function LearningWorkspace() {
   const [connection, setConnection] = useState<ConnectionState>("checking");
   const [busy, setBusy] = useState(false);
   const [trace, setTrace] = useState<AgentTrace[]>([]);
+  const [graphEvents, setGraphEvents] = useState<GraphRunEvent[]>([]);
+  const [activeRunId, setActiveRunId] = useState("");
+  const [graphRunStatus, setGraphRunStatus] = useState<GraphRunStatus>("idle");
   const [lastResponse, setLastResponse] = useState<AgentResponse | null>(null);
   const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(
     null,
@@ -862,6 +899,9 @@ export default function LearningWorkspace() {
     ]);
     setPendingSuggestions([]);
     setTrace([]);
+    setGraphEvents([]);
+    setActiveRunId("");
+    setGraphRunStatus("idle");
     setLastResponse(null);
     setQaSessionId("");
     setUserIdentity({
@@ -1206,6 +1246,9 @@ export default function LearningWorkspace() {
   async function runAgent(request: AgentRequest): Promise<AgentResponse> {
     setBusy(true);
     setTrace(PENDING_TRACE);
+    setGraphEvents([]);
+    setActiveRunId("");
+    setGraphRunStatus("created");
     setConnection("checking");
     try {
       const response = await dispatchToCentralOrchestrator(
@@ -1213,9 +1256,25 @@ export default function LearningWorkspace() {
           ...request,
           learning_progress: learningProgress.agentContext,
         },
-        (nextTrace) => setTrace(nextTrace),
+        {
+          onTrace: setTrace,
+          onRunCreated: setActiveRunId,
+          onStatus: setGraphRunStatus,
+          onEvent: (event) => {
+            setGraphEvents((current) => {
+              if (
+                event.event_id &&
+                current.some((item) => item.event_id === event.event_id)
+              ) {
+                return current;
+              }
+              return [...current, event];
+            });
+          },
+        },
       );
       setConnection("live");
+      setGraphRunStatus("completed");
       setTrace(response.agent_trace || []);
       setLastResponse(response);
       addSuggestions(response);
@@ -1224,6 +1283,9 @@ export default function LearningWorkspace() {
       const message =
         error instanceof Error ? error.message : "无法连接中央调度器";
       setConnection(message.includes("DEEPSEEK_API_KEY") ? "needs-key" : "idle");
+      setGraphRunStatus((current) =>
+        current === "cancelled" ? current : "failed",
+      );
       setTrace([]);
       setLastResponse(null);
       setToast({
@@ -1396,6 +1458,9 @@ export default function LearningWorkspace() {
           setUserIdentity={setUserIdentity}
           busy={busy}
           trace={trace}
+          graphEvents={graphEvents}
+          runId={activeRunId}
+          runStatus={graphRunStatus}
           response={lastResponse}
           activeUserId={activeUserId}
           onSwitchUser={() => setUserDialog("switch")}
@@ -1649,6 +1714,9 @@ function Sidebar({
   setUserIdentity,
   busy,
   trace,
+  graphEvents,
+  runId,
+  runStatus,
   response,
   activeUserId,
   onSwitchUser,
@@ -1662,6 +1730,9 @@ function Sidebar({
   setUserIdentity: React.Dispatch<React.SetStateAction<UserIdentity>>;
   busy: boolean;
   trace: AgentTrace[];
+  graphEvents: GraphRunEvent[];
+  runId: string;
+  runStatus: GraphRunStatus;
   response: AgentResponse | null;
   activeUserId: string;
   onSwitchUser: () => void;
@@ -1716,6 +1787,9 @@ function Sidebar({
       <AgentActivity
         busy={busy}
         trace={trace}
+        graphEvents={graphEvents}
+        runId={runId}
+        runStatus={runStatus}
         response={response}
         compact
       />
@@ -2107,31 +2181,239 @@ function RecentHistoryPanel({
   );
 }
 
+function graphEventAgentName(agentId?: string, displayName?: string): string {
+  if (displayName) return displayName;
+  if (!agentId) return "中央调度器";
+  return AGENT_LABELS[agentId] || agentId.replaceAll("_", " ");
+}
+
+function graphPayloadValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    if (!value.length) return "0 项";
+    const first = value[0];
+    return typeof first === "string"
+      ? `${value.length} 项 · ${first}`
+      : `${value.length} 项`;
+  }
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value as Record<string, unknown>);
+    return keys.length ? `${keys.length} 个字段` : "已生成";
+  }
+  if (typeof value === "boolean") return value ? "是" : "否";
+  const text = String(value ?? "").trim();
+  return text.length > 44 ? `${text.slice(0, 41)}...` : text;
+}
+
+function graphPayloadSummary(payloadRefs?: GraphPayloadRefs) {
+  if (!payloadRefs) return [];
+  const entries = Object.entries(payloadRefs).filter(
+    ([, value]) => value !== null && value !== undefined && value !== "",
+  );
+  entries.sort(([left], [right]) => {
+    const priority = Object.keys(PAYLOAD_REF_LABELS);
+    const leftIndex = priority.indexOf(left);
+    const rightIndex = priority.indexOf(right);
+    return (leftIndex < 0 ? 99 : leftIndex) - (rightIndex < 0 ? 99 : rightIndex);
+  });
+  return entries.slice(0, 5).map(([key, value]) => ({
+    key,
+    label: PAYLOAD_REF_LABELS[key] || key.replaceAll("_", " "),
+    value: graphPayloadValue(value),
+  }));
+}
+
 function AgentActivity({
   busy,
   trace,
+  graphEvents,
+  runId,
+  runStatus,
   response,
   compact = false,
 }: {
   busy: boolean;
   trace: AgentTrace[];
+  graphEvents: GraphRunEvent[];
+  runId: string;
+  runStatus: GraphRunStatus;
   response: AgentResponse | null;
   compact?: boolean;
 }) {
-  const displayed = busy ? PENDING_TRACE : trace;
+  const activities = graphEvents.filter(
+    (event): event is AgentActivityEvent => event.event_type === "agent.activity",
+  );
+  const handoffs = graphEvents.filter(
+    (event): event is AgentMessageEvent => event.event_type === "agent.message",
+  );
+  const latestActivity = activities.at(-1);
+  const agents = Array.from(
+    new Map(
+      activities.map((event) => [
+        event.agent_id || event.agent_display_name || "agent",
+        graphEventAgentName(event.agent_id, event.agent_display_name),
+      ]),
+    ).values(),
+  );
+  const displayed = graphEvents.length ? [] : busy ? PENDING_TRACE : trace;
   const ragEvidence = response?.rag_package?.evidence ?? [];
+  const effectiveStatus = busy && runStatus === "created" ? "running" : runStatus;
 
   return (
     <section className={`activity-panel ${compact ? "sidebar-agent-activity" : ""}`}>
       <div className="activity-header">
         <div>
-          <h3>Agent 活动</h3>
-          <p>{busy ? "任务执行中" : trace.length ? "最近一次执行轨迹" : "等待任务"}</p>
+          <h3>多 Agent 协作</h3>
+          <p>
+            {graphEvents.length || runId
+              ? RUN_STATUS_LABELS[effectiveStatus]
+              : "等待任务"}
+          </p>
         </div>
-        {!!response && <span className="mini-chip">v2</span>}
+        <span className={`run-status-pill ${effectiveStatus}`}>
+          {effectiveStatus === "running" && <span aria-hidden="true" />}
+          {RUN_STATUS_LABELS[effectiveStatus]}
+        </span>
       </div>
+
+      {(runId || graphEvents.length > 0) && (
+        <div className="agent-run-overview">
+          <div className="agent-section-heading">
+            <h4>当前运行状态</h4>
+            <span title={runId}>{runId ? runId.replace(/^run_/, "#") : "创建中"}</span>
+          </div>
+          <div className="run-overview-grid">
+            <div>
+              <small>当前 Agent</small>
+              <strong>
+                {latestActivity
+                  ? graphEventAgentName(
+                      latestActivity.agent_id,
+                      latestActivity.agent_display_name,
+                    )
+                  : effectiveStatus === "completed"
+                    ? "中央调度器"
+                    : "正在分配"}
+              </strong>
+            </div>
+            <div>
+              <small>当前节点</small>
+              <strong title={latestActivity?.node_id || ""}>
+                {latestActivity?.node_id
+                  ? TRACE_LABELS[latestActivity.node_id] || latestActivity.node_id
+                  : "—"}
+              </strong>
+            </div>
+            <div>
+              <small>参与 Agent</small>
+              <strong>{agents.length}</strong>
+            </div>
+            <div>
+              <small>实时事件</small>
+              <strong>{graphEvents.length}</strong>
+            </div>
+          </div>
+          {!!agents.length && (
+            <div className="agent-participant-list" aria-label="参与协作的 Agent">
+              {agents.map((agent) => (
+                <span key={agent}>{agent}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!!graphEvents.length && (
+        <div className="agent-event-section handoff-section">
+          <div className="agent-section-heading">
+            <h4>Agent 协作流</h4>
+            <span>{handoffs.length} 次交接</span>
+          </div>
+          {handoffs.length ? (
+            <div className="handoff-list">
+              {handoffs.map((event, index) => {
+                const payload = graphPayloadSummary(event.payload_refs);
+                return (
+                  <article
+                    className="handoff-item"
+                    key={event.event_id || `${event.from_agent}-${event.to_agent}-${index}`}
+                  >
+                    <div className="handoff-route">
+                      <span>{graphEventAgentName(event.from_agent)}</span>
+                      <b aria-label="交接给">→</b>
+                      <span>{graphEventAgentName(event.to_agent)}</span>
+                    </div>
+                    <div className="handoff-message">
+                      <strong>{event.display_text || "交接任务"}</strong>
+                      <small>{event.message_type || "handoff"}</small>
+                    </div>
+                    {!!event.detail && <p>{event.detail}</p>}
+                    {!!payload.length && (
+                      <div className="event-payload-list">
+                        {payload.map((item) => (
+                          <span key={`${event.event_id}-${item.key}`}>
+                            <b>{item.label}</b>{item.value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="agent-event-empty">任务仍在首个 Agent 内处理中，暂未发生交接。</p>
+          )}
+        </div>
+      )}
+
+      {!!activities.length && (
+        <div className="agent-event-section activity-timeline-section">
+          <div className="agent-section-heading">
+            <h4>节点执行时间线</h4>
+            <span>{activities.length} 个节点</span>
+          </div>
+          <div className="trace-list live-agent-trace">
+            {activities.map((event, index) => {
+              const isCurrent = busy && index === activities.length - 1;
+              const payload = graphPayloadSummary(event.payload_refs);
+              return (
+                <div
+                  className={`trace-item ${isCurrent ? "running" : "done"}`}
+                  key={event.event_id || `${event.node_id}-${index}`}
+                >
+                  <span className="trace-node">
+                    {isCurrent ? "•" : "✓"}
+                  </span>
+                  <div className="trace-copy">
+                    <small className="trace-agent-name">
+                      {graphEventAgentName(event.agent_id, event.agent_display_name)}
+                    </small>
+                    <strong title={event.node_id || ""}>
+                      {(event.node_id && TRACE_LABELS[event.node_id]) ||
+                        event.display_text ||
+                        event.node_id ||
+                        "Agent 节点"}
+                    </strong>
+                    <p>{event.detail || event.display_text || "已完成当前步骤"}</p>
+                    {!!payload.length && (
+                      <div className="event-payload-list">
+                        {payload.map((item) => (
+                          <span key={`${event.event_id}-${item.key}`}>
+                            <b>{item.label}</b>{item.value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {displayed.length ? (
-        <div className="trace-list">
+        <div className="trace-list legacy-agent-trace">
           {displayed.map((item, index) => {
             const state =
               item.status === "running"
@@ -2153,9 +2435,11 @@ function AgentActivity({
           })}
         </div>
       ) : (
-        <div className="empty-activity">
-          发送问题后，这里会展示中央调度器返回的 agent_trace。
-        </div>
+        !graphEvents.length && (
+          <div className="empty-activity">
+            发起问答、Quiz 或讲义任务后，这里会实时展示 Agent 节点、协作交接与传递摘要。
+          </div>
+        )
       )}
       {!!response && (
         <div className="report-card">
