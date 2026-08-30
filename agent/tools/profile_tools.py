@@ -20,6 +20,28 @@ def load_profile_context(
     )
 
 
+def load_profile_markdown(
+    *,
+    user_id: str,
+    storage_root: str | Path | None = None,
+) -> dict[str, Any]:
+    return ProfileManager(storage_root).load_profile_markdown(user_id)
+
+
+def update_profile_markdown(
+    *,
+    user_id: str,
+    editable_content: str,
+    expected_hash: str,
+    storage_root: str | Path | None = None,
+) -> dict[str, Any]:
+    return ProfileManager(storage_root).update_profile_markdown(
+        user_id,
+        editable_content=editable_content,
+        expected_hash=expected_hash,
+    )
+
+
 def apply_profile_update_suggestions(
     *,
     user_id: str,

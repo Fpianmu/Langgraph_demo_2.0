@@ -1,8 +1,0 @@
-{
-  "default_unit": "mm",
-  "recommended_ranges": {
-    "roughing_feed_mm_per_rev": [0.1, 0.35],
-    "finishing_feed_mm_per_rev": [0.05, 0.15],
-    "depth_of_cut_mm": [0.2, 2.0]
-  }
-}

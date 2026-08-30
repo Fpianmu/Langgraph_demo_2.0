@@ -1,7 +1,7 @@
 # Knowledge Gap Summary
 
 - User: user_001
-- Updated at: 2026-08-28T13:39:07.332910+00:00
+- Updated at: 2026-08-30T13:30:53.203238+00:00
 - Open gaps: 3
 - High severity: 1
 

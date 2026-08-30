@@ -22,25 +22,7 @@ import type {
   KnowledgeGap,
   KnowledgeGapSummary,
 } from "@/lib/knowledge-gap-client";
-
-type SelfLevelChoice = "beginner" | "intermediate" | "proficient" | "expert";
-
-type CustomProfileDraft = {
-  profession: string;
-  foundations: string[];
-  about: string;
-  level: SelfLevelChoice;
-  goals: string[];
-  goalOther: string;
-  learningStyles: string[];
-  learningOther: string;
-  answerDetail: string;
-  contentDifficulty: string;
-  quizPreferences: string[];
-  lecturePreferences: string[];
-  avoidances: string[];
-  avoidanceOther: string;
-};
+import ProfileMarkdownEditor from "@/components/ProfileMarkdownEditor";
 
 type MemoryEvent = {
   id: string;
@@ -105,89 +87,6 @@ const RESOURCE_TYPE_NAMES: Record<string, string> = {
   practice: "实训练习",
   quiz: "Quiz 测验",
 };
-
-const PROFESSION_OPTIONS = ["机械类", "自动化类", "计算机类", "其他"];
-const FOUNDATION_OPTIONS = ["机械制图", "编程基础", "加工工艺", "机床实操经验"];
-const GOAL_OPTIONS = ["掌握课程基础知识", "应对课程考试", "提高实际操作能力", "准备比赛/项目", "岗位能力提升", "其他"];
-const LEARNING_STYLE_OPTIONS = ["步骤化讲解", "先举例", "少术语", "图示辅助", "先讲结论", "深入讲原理", "联系实际", "多做练习"];
-const QUIZ_PREFERENCE_OPTIONS = ["从易到难", "每题给解析", "优先薄弱知识点"];
-const LECTURE_PREFERENCE_OPTIONS = ["多举例", "分步骤", "增加总结", "增加理论推导"];
-const AVOIDANCE_OPTIONS = ["大量未经解释的专业术语", "跳过中间步骤", "过多基础解释", "直接给答案", "过长背景介绍"];
-
-const SELF_LEVEL_OPTIONS: Array<{ id: SelfLevelChoice; title: string; detail: string; backend: LearnerProfile["level"] }> = [
-  { id: "beginner", title: "初学者", detail: "从零开始", backend: "beginner" },
-  { id: "intermediate", title: "有基础", detail: "了解主要概念", backend: "intermediate" },
-  { id: "proficient", title: "熟练", detail: "能够独立应用", backend: "advanced" },
-  { id: "expert", title: "高阶", detail: "希望深入学习", backend: "advanced" },
-];
-
-function selectedFromText(text: string, options: string[]): string[] {
-  return options.filter((option) => text.includes(option));
-}
-
-function textAfterLabel(text: string, label: string): string {
-  const match = text.match(new RegExp(`${label}：([^；]*)`));
-  return match?.[1]?.trim() || "";
-}
-
-function createCustomProfileDraft(profile: LearnerProfile): CustomProfileDraft {
-  const background = String(profile.background || "");
-  const preference = String(profile.preference || "");
-  const profession = PROFESSION_OPTIONS.find((option) => background.includes(option.replace("类", ""))) || "其他";
-  const hasStructuredBackground = background.includes("专业背景：") || background.includes("已有基础：") || background.includes("补充：");
-  const level: SelfLevelChoice = profile.level === "beginner"
-    ? "beginner"
-    : profile.level === "intermediate"
-      ? "intermediate"
-      : preference.includes("自评定位：高阶")
-        ? "expert"
-        : "proficient";
-  return {
-    profession,
-    foundations: selectedFromText(background, FOUNDATION_OPTIONS),
-    about: hasStructuredBackground ? textAfterLabel(background, "补充") : (profession === "其他" ? background : ""),
-    level,
-    goals: selectedFromText(preference, GOAL_OPTIONS),
-    goalOther: textAfterLabel(preference, "其他学习目标"),
-    learningStyles: LEARNING_STYLE_OPTIONS.filter((option) =>
-      preference.includes(option) || (option === "步骤化讲解" && preference.includes("步骤化")),
-    ),
-    learningOther: preference.includes("学习方式：") ? textAfterLabel(preference, "其他讲解要求") : preference,
-    answerDetail: ["简洁", "适中", "详细"].find((option) => preference.includes(`回答详细度：${option}`)) || "适中",
-    contentDifficulty: ["自动匹配", "偏基础", "偏进阶"].find((option) => preference.includes(`内容难度：${option}`)) || "自动匹配",
-    quizPreferences: selectedFromText(preference, QUIZ_PREFERENCE_OPTIONS),
-    lecturePreferences: selectedFromText(preference, LECTURE_PREFERENCE_OPTIONS),
-    avoidances: selectedFromText(preference, AVOIDANCE_OPTIONS),
-    avoidanceOther: textAfterLabel(preference, "其他避免内容"),
-  };
-}
-
-function composeProfile(draft: CustomProfileDraft): LearnerProfile {
-  const selectedLevel = SELF_LEVEL_OPTIONS.find((option) => option.id === draft.level) || SELF_LEVEL_OPTIONS[0];
-  const background = [
-    `专业背景：${draft.profession}`,
-    draft.foundations.length ? `已有基础：${draft.foundations.join("、")}` : "",
-    draft.about.trim() ? `补充：${draft.about.trim()}` : "",
-  ].filter(Boolean).join("；");
-  const preference = [
-    draft.level === "expert" ? "自评定位：高阶" : "",
-    draft.goals.length ? `学习目标：${draft.goals.filter((item) => item !== "其他").join("、")}` : "",
-    draft.goals.includes("其他") && draft.goalOther.trim() ? `其他学习目标：${draft.goalOther.trim()}` : "",
-    draft.learningStyles.length ? `学习方式：${draft.learningStyles.join("、")}` : "",
-    draft.learningOther.trim() ? `其他讲解要求：${draft.learningOther.trim()}` : "",
-    `回答详细度：${draft.answerDetail}`,
-    `内容难度：${draft.contentDifficulty}`,
-    draft.quizPreferences.length ? `Quiz：${draft.quizPreferences.join("、")}` : "",
-    draft.lecturePreferences.length ? `讲义：${draft.lecturePreferences.join("、")}` : "",
-    draft.avoidances.length ? `不希望出现：${draft.avoidances.join("、")}` : "",
-    draft.avoidanceOther.trim() ? `其他避免内容：${draft.avoidanceOther.trim()}` : "",
-  ].filter(Boolean).join("；");
-  return { background, level: selectedLevel.backend, preference };
-}
-
-function toggleSelection(items: string[], value: string): string[] {
-  return items.includes(value) ? items.filter((item) => item !== value) : [...items, value];
-}
 
 function stringValue(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value.trim() : fallback;
@@ -393,12 +292,10 @@ export function UserCenterView({
   assessment,
   capabilityOverall,
   progress,
-  setProfile,
   knowledgeGaps,
   knowledgeGapSummary,
   busy,
   onReload,
-  onSaved,
 }: UserCenterViewProps) {
   const [openSections, setOpenSections] = useState({
     overview: true,
@@ -413,8 +310,6 @@ export function UserCenterView({
   const [resourceBusy, setResourceBusy] = useState(false);
   const [resourceError, setResourceError] = useState("");
   const [selectedResourceChapter, setSelectedResourceChapter] = useState("");
-  const [customDraft, setCustomDraft] = useState(() => createCustomProfileDraft(profile));
-  const originalCustomDraft = useMemo(() => createCustomProfileDraft(profile), [profile]);
 
   const capabilityResults = capabilityResultList(assessment, profile.level);
   const radarItems = capabilityResults.map((result) => ({
@@ -454,22 +349,6 @@ export function UserCenterView({
           visibleResourceRecords.length,
       )
     : null;
-  const draftProfile = useMemo(() => composeProfile(customDraft), [customDraft]);
-  const profileChanged = JSON.stringify(customDraft) !== JSON.stringify(originalCustomDraft);
-  const profileCompletion = useMemo(() => {
-    const completed = [
-      Boolean(customDraft.profession),
-      customDraft.foundations.length > 0 || Boolean(customDraft.about.trim()),
-      Boolean(customDraft.level),
-      customDraft.goals.length > 0,
-      customDraft.learningStyles.length > 0,
-      Boolean(customDraft.answerDetail && customDraft.contentDifficulty),
-      customDraft.quizPreferences.length > 0 || customDraft.lecturePreferences.length > 0,
-      customDraft.avoidances.length > 0 || Boolean(customDraft.avoidanceOther.trim()),
-    ].filter(Boolean).length;
-    return Math.round((completed / 8) * 100);
-  }, [customDraft]);
-
   const loadResources = useCallback(async () => {
     setResourceBusy(true);
     setResourceError("");
@@ -498,12 +377,6 @@ export function UserCenterView({
   }, [loadResources]);
 
   useEffect(() => {
-    // The editable draft mirrors backend updates until the learner starts editing.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCustomDraft(createCustomProfileDraft(profile));
-  }, [profile]);
-
-  useEffect(() => {
     if (!gapsByChapter.length) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setExpandedChapter((current) => current || gapsByChapter[0][0]);
@@ -520,11 +393,6 @@ export function UserCenterView({
 
   async function reloadAll() {
     await Promise.all([Promise.resolve(onReload()), loadResources()]);
-  }
-
-  async function saveProfileDraft() {
-    setProfile(draftProfile);
-    await onSaved(draftProfile);
   }
 
   function setSectionOpen(section: keyof typeof openSections, open: boolean) {
@@ -720,106 +588,17 @@ export function UserCenterView({
           >
             <summary>
               <span className="user-center-disclosure-arrow" aria-hidden="true" />
-              <span><strong>自定义画像</strong><small>调整知链的个性化学习方式</small></span>
-              <em>{profileCompletion}% 完成</em>
+              <span><strong>自定义画像</strong><small>直接查看并编辑当前用户的 profile.md</small></span>
+              <em>Markdown</em>
             </summary>
             <div className="user-center-disclosure-body">
             <section className="custom-profile-view">
-              <div className="custom-profile-intro">
-                <div>
-                  <span className="eyebrow">CUSTOM INSTRUCTIONS</span>
-                  <h3>让知链更了解你</h3>
-                  <p>能选择的信息无需手动填写；只有个性化情况保留简短补充。</p>
-                </div>
-                <div className="profile-completion" aria-label={`画像完成度 ${profileCompletion}%`}>
-                  <span>画像完成度</span>
-                  <strong>{profileCompletion}%</strong>
-                  <i><b style={{ width: `${profileCompletion}%` }} /></i>
-                </div>
-              </div>
-              <div className="custom-profile-workspace">
-                <div className="custom-profile-sections">
-                  <section className="custom-setting-section">
-                    <header><span>01</span><div><h4>关于我</h4><p>选择专业与已有基础，再按需补充个人情况。</p></div></header>
-                    <div className="custom-setting-body">
-                      <fieldset><legend>专业背景 · 单选</legend><div className="profile-choice-row single">
-                        {PROFESSION_OPTIONS.map((option) => <button type="button" aria-pressed={customDraft.profession === option} className={customDraft.profession === option ? "selected" : ""} onClick={() => setCustomDraft((current) => ({ ...current, profession: option }))} key={option}>{option}</button>)}
-                      </div></fieldset>
-                      <fieldset><legend>已有基础 · 可多选</legend><div className="profile-choice-row">
-                        {FOUNDATION_OPTIONS.map((option) => <button type="button" aria-pressed={customDraft.foundations.includes(option)} className={customDraft.foundations.includes(option) ? "selected" : ""} onClick={() => setCustomDraft((current) => ({ ...current, foundations: toggleSelection(current.foundations, option) }))} key={option}>{option}</button>)}
-                      </div></fieldset>
-                      <label className="compact-profile-input"><span>补充说明 <small>可选</small></span><textarea value={customDraft.about} maxLength={500} placeholder="例如：没有实际操作过数控机床，但有 C 语言基础。" onChange={(event) => setCustomDraft((current) => ({ ...current, about: event.target.value }))} /><em>{customDraft.about.length}/500</em></label>
-                    </div>
-                  </section>
-
-                  <section className="custom-setting-section">
-                    <header><span>02</span><div><h4>当前自评水平</h4><p>仅用于调整内容难度，不会直接改变能力评分。</p></div></header>
-                    <div className="level-choice-grid">
-                      {SELF_LEVEL_OPTIONS.map((option) => <button type="button" aria-pressed={customDraft.level === option.id} className={customDraft.level === option.id ? "selected" : ""} onClick={() => setCustomDraft((current) => ({ ...current, level: option.id }))} key={option.id}><strong>{option.title}</strong><span>{option.detail}</span><i aria-hidden="true">✓</i></button>)}
-                    </div>
-                  </section>
-
-                  <section className="custom-setting-section">
-                    <header><span>03</span><div><h4>当前学习目标</h4><p>选择一个或多个近期目标。</p></div></header>
-                    <div className="custom-setting-body"><div className="profile-choice-row">
-                      {GOAL_OPTIONS.map((option) => <button type="button" aria-pressed={customDraft.goals.includes(option)} className={customDraft.goals.includes(option) ? "selected" : ""} onClick={() => setCustomDraft((current) => ({ ...current, goals: toggleSelection(current.goals, option) }))} key={option}>{option}</button>)}
-                    </div>{customDraft.goals.includes("其他") && <label className="inline-profile-input"><span>其他目标</span><input value={customDraft.goalOther} maxLength={100} placeholder="补充你的学习目标" onChange={(event) => setCustomDraft((current) => ({ ...current, goalOther: event.target.value }))} /></label>}</div>
-                  </section>
-
-                  <section className="custom-setting-section">
-                    <header><span>04</span><div><h4>我喜欢怎样学习</h4><p>这些偏好会影响回答、Quiz 解析和讲义表达。</p></div></header>
-                    <div className="custom-setting-body"><div className="profile-choice-row">
-                      {LEARNING_STYLE_OPTIONS.map((option) => <button type="button" aria-pressed={customDraft.learningStyles.includes(option)} className={customDraft.learningStyles.includes(option) ? "selected" : ""} onClick={() => setCustomDraft((current) => ({ ...current, learningStyles: toggleSelection(current.learningStyles, option) }))} key={option}>{option}</button>)}
-                    </div><label className="inline-profile-input"><span>其他讲解要求 <small>可选</small></span><input value={customDraft.learningOther} maxLength={160} placeholder="例如：关键步骤附上容易犯错的原因" onChange={(event) => setCustomDraft((current) => ({ ...current, learningOther: event.target.value }))} /></label></div>
-                  </section>
-
-                  <section className="custom-setting-section">
-                    <header><span>05</span><div><h4>内容生成偏好</h4><p>用选择项控制回答、Quiz 与讲义的默认呈现。</p></div></header>
-                    <div className="custom-setting-body content-preference-grid">
-                      <fieldset><legend>回答详细度</legend><div className="profile-segmented-control">{["简洁", "适中", "详细"].map((option) => <button type="button" aria-pressed={customDraft.answerDetail === option} className={customDraft.answerDetail === option ? "selected" : ""} onClick={() => setCustomDraft((current) => ({ ...current, answerDetail: option }))} key={option}>{option}</button>)}</div></fieldset>
-                      <fieldset><legend>默认内容难度</legend><div className="profile-segmented-control">{["自动匹配", "偏基础", "偏进阶"].map((option) => <button type="button" aria-pressed={customDraft.contentDifficulty === option} className={customDraft.contentDifficulty === option ? "selected" : ""} onClick={() => setCustomDraft((current) => ({ ...current, contentDifficulty: option }))} key={option}>{option}</button>)}</div></fieldset>
-                      <fieldset className="wide"><legend>Quiz 偏好 · 可多选</legend><div className="profile-choice-row">{QUIZ_PREFERENCE_OPTIONS.map((option) => <button type="button" aria-pressed={customDraft.quizPreferences.includes(option)} className={customDraft.quizPreferences.includes(option) ? "selected" : ""} onClick={() => setCustomDraft((current) => ({ ...current, quizPreferences: toggleSelection(current.quizPreferences, option) }))} key={option}>{option}</button>)}</div></fieldset>
-                      <fieldset className="wide"><legend>讲义偏好 · 可多选</legend><div className="profile-choice-row">{LECTURE_PREFERENCE_OPTIONS.map((option) => <button type="button" aria-pressed={customDraft.lecturePreferences.includes(option)} className={customDraft.lecturePreferences.includes(option) ? "selected" : ""} onClick={() => setCustomDraft((current) => ({ ...current, lecturePreferences: toggleSelection(current.lecturePreferences, option) }))} key={option}>{option}</button>)}</div></fieldset>
-                    </div>
-                  </section>
-
-                  <section className="custom-setting-section">
-                    <header><span>06</span><div><h4>我不希望出现</h4><p>提前说明需要避免的表达方式。</p></div></header>
-                    <div className="custom-setting-body"><div className="profile-choice-row avoidance">
-                      {AVOIDANCE_OPTIONS.map((option) => <button type="button" aria-pressed={customDraft.avoidances.includes(option)} className={customDraft.avoidances.includes(option) ? "selected" : ""} onClick={() => setCustomDraft((current) => ({ ...current, avoidances: toggleSelection(current.avoidances, option) }))} key={option}>{option}</button>)}
-                    </div><label className="inline-profile-input"><span>其他不希望出现的内容 <small>可选</small></span><input value={customDraft.avoidanceOther} maxLength={160} placeholder="补充特殊要求" onChange={(event) => setCustomDraft((current) => ({ ...current, avoidanceOther: event.target.value }))} /></label></div>
-                  </section>
-                </div>
-
-                <aside className="profile-live-preview">
-                  <span className="eyebrow">LIVE PREVIEW</span>
-                  <h4>知链将这样帮助你</h4>
-                  <p>{customDraft.profession || "未选择专业"} · {SELF_LEVEL_OPTIONS.find((option) => option.id === customDraft.level)?.title}</p>
-                  <dl>
-                    <div><dt>当前目标</dt><dd>{customDraft.goals.filter((item) => item !== "其他").join("、") || customDraft.goalOther || "等待选择"}</dd></div>
-                    <div><dt>讲解方式</dt><dd>{customDraft.learningStyles.join("、") || "采用系统默认方式"}</dd></div>
-                    <div><dt>内容设置</dt><dd>{customDraft.answerDetail}回答 · {customDraft.contentDifficulty}</dd></div>
-                    <div><dt>重点避免</dt><dd>{customDraft.avoidances.join("、") || "暂无特殊限制"}</dd></div>
-                  </dl>
-                  <div className="profile-preview-example"><span>回答示例</span><p>{customDraft.learningStyles.includes("先讲结论") ? "先给出核心结论，" : ""}{customDraft.learningStyles.includes("先举例") ? "从实际案例开始，" : ""}{customDraft.learningStyles.includes("步骤化讲解") ? "再按步骤拆解操作。" : "再清楚解释关键知识。"}</p></div>
-                  <div className="custom-profile-boundary"><strong>与系统画像相互独立</strong><span>可编辑：以上学习偏好</span><span>只读：能力分数、Quiz、知识漏洞与证据结论</span></div>
-                </aside>
-              </div>
+              <ProfileMarkdownEditor key={userId} userId={userId} />
             </section>
             </div>
           </details>
         </div>
       </section>
-
-      {profileChanged && (
-        <div className="profile-save-bar" role="status">
-          <span><i />有未保存的修改</span>
-          <div>
-            <button type="button" disabled={busy} onClick={() => setCustomDraft(createCustomProfileDraft(profile))}>取消</button>
-            <button type="button" className="primary" disabled={busy} onClick={() => void saveProfileDraft()}>{busy ? "保存中…" : "保存更改"}</button>
-          </div>
-        </div>
-      )}
 
       {selectedGap && (
         <div className="gap-drawer-backdrop" role="presentation" onMouseDown={() => setSelectedGap(null)}>

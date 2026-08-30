@@ -8,7 +8,7 @@ from typing import Any
 from agent.tools.profile.capability_assessment_store import CapabilityAssessmentDbStore
 from agent.tools.profile.config import ProfileConfig
 from agent.tools.profile.knowledge_gap_store import KnowledgeGapFileStore
-from agent.tools.profile.markdown_store import ProfileMarkdownStore
+from agent.tools.profile.markdown_store import EDITABLE_PROFILE_SECTIONS, ProfileMarkdownStore
 from agent.tools.profile.path_assignment_store import PathAssignmentFileStore
 from agent.tools.profile.repository import ProfileRepository
 from agent.storage_layout import migrate_legacy_storage
@@ -66,6 +66,36 @@ class ProfileManager:
             "path_assignment_files": path_assignment_sync["files"],
             "profile_md_ref": str(self.markdown_store.path_for(user_id)),
             "profile_md_content": markdown,
+        }
+
+    def load_profile_markdown(self, user_id: str) -> dict[str, Any]:
+        self.repository.get_or_create_user(user_id)
+        snapshot = self.markdown_store.snapshot(user_id)
+        return {
+            "user_id": user_id,
+            **snapshot,
+            "editable_sections": list(EDITABLE_PROFILE_SECTIONS),
+            "profile_md_ref": str(self.markdown_store.path_for(user_id)),
+        }
+
+    def update_profile_markdown(
+        self,
+        user_id: str,
+        *,
+        editable_content: str,
+        expected_hash: str,
+    ) -> dict[str, Any]:
+        self.repository.get_or_create_user(user_id)
+        snapshot = self.markdown_store.update_editable_sections(
+            user_id,
+            editable_content=editable_content,
+            expected_hash=expected_hash,
+        )
+        return {
+            "user_id": user_id,
+            **snapshot,
+            "editable_sections": list(EDITABLE_PROFILE_SECTIONS),
+            "profile_md_ref": str(self.markdown_store.path_for(user_id)),
         }
 
     def assign_learning_path(self, user_id: str, assignment: dict[str, Any]) -> dict[str, Any]:

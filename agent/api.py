@@ -49,7 +49,11 @@ from agent.frontend_state import (
     load_frontend_workspace_state,
     save_frontend_workspace_state,
 )
-from agent.tools.profile_tools import apply_profile_update_suggestions
+from agent.tools.profile_tools import (
+    apply_profile_update_suggestions,
+    load_profile_markdown,
+    update_profile_markdown,
+)
 from agent.tools.learning_recommendation_tools import (
     load_learning_recommendations,
     refresh_learning_recommendations,
@@ -374,6 +378,38 @@ def update_profile(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         suggestions=suggestions,
         storage_root=storage_root,
     )
+
+
+@app.get("/api/profile/{user_id}/markdown")
+def get_profile_markdown(user_id: str, storage_root: str | None = None) -> dict[str, Any]:
+    return load_profile_markdown(user_id=user_id, storage_root=storage_root)
+
+
+@app.put("/api/profile/{user_id}/markdown")
+def put_profile_markdown(user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    editable_content = payload.get("editable_content")
+    expected_hash = payload.get("expected_hash")
+    if not isinstance(editable_content, str) or not isinstance(expected_hash, str):
+        raise HTTPException(
+            status_code=422,
+            detail="editable_content and expected_hash are required",
+        )
+    try:
+        return update_profile_markdown(
+            user_id=user_id,
+            editable_content=editable_content,
+            expected_hash=expected_hash,
+            storage_root=payload.get("storage_root"),
+        )
+    except RuntimeError as exc:
+        if str(exc) == "profile_markdown_conflict":
+            raise HTTPException(
+                status_code=409,
+                detail="profile.md has changed; reload before saving",
+            ) from None
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 @app.get("/api/frontend-state/{user_id}")
