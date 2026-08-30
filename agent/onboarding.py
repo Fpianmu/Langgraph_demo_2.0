@@ -11,62 +11,88 @@ from agent.tools.profile.manager import ProfileManager
 
 ONBOARDING_QUESTIONS: list[dict[str, Any]] = [
     {
-        "id": "onboarding_foundations_001",
-        "stem": "数控车床中负责带动工件旋转、形成主运动的部件通常是哪个？",
+        "id": "onboarding_background_001",
+        "stem": "你之前有没有接触过数控车床或类似的加工设备？",
         "question_type": "single_choice",
-        "options": ["主轴系统", "冷却泵", "尾座手轮", "照明灯"],
+        "options": ["几乎没有接触过", "听过或见过，但没实际操作过", "有过简单接触", "比较熟悉"],
+        "answer": "D",
+        "capability_dimension": "background",
+        "knowledge_points": [
+            {"id": "cnc_lathe.background.experience", "name": "数控学习与实训经历", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_background_002",
+        "stem": "你对零件图和尺寸标注的熟悉程度更接近哪一种？",
+        "question_type": "single_choice",
+        "options": ["基本看不懂", "能看懂一点简单标注", "大部分常见标注能理解", "能比较熟练地阅读"],
+        "answer": "C",
+        "capability_dimension": "background",
+        "knowledge_points": [
+            {"id": "cnc_lathe.background.drawing_reading", "name": "图纸阅读基础", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_background_003",
+        "stem": "你之前是否做过上机实训、仿真训练或类似操作练习？",
+        "question_type": "single_choice",
+        "options": ["完全没有", "只做过很少量体验", "做过一段时间", "做过较系统的训练"],
+        "answer": "D",
+        "capability_dimension": "background",
+        "knowledge_points": [
+            {"id": "cnc_lathe.background.practice_experience", "name": "上机与仿真经验", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_background_004",
+        "stem": "你对加工中的安全要求、急停、报警这些内容的了解程度如何？",
+        "question_type": "single_choice",
+        "options": ["几乎不了解", "知道一些基本概念", "比较清楚常见要求", "比较熟悉并能独立判断"],
+        "answer": "C",
+        "capability_dimension": "background",
+        "knowledge_points": [
+            {"id": "cnc_lathe.background.safety_awareness", "name": "安全意识基础", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_knowledge_001",
+        "stem": "数控加工中，程序的作用更接近下面哪项？",
+        "question_type": "single_choice",
+        "options": ["告诉机床按什么步骤和轨迹加工", "只是记录操作员姓名", "只用于显示时间", "只用于给刀具编号"],
         "answer": "A",
         "capability_dimension": "foundations",
         "knowledge_points": [
-            {"id": "cnc_lathe.1.1.spindle_system", "name": "主轴系统与主运动", "weight": 1.0}
+            {"id": "cnc_lathe.1.2.program_role", "name": "程序与加工控制", "weight": 1.0}
         ],
         "difficulty": "easy",
         "points": 1,
     },
     {
-        "id": "onboarding_safety_001",
-        "stem": "数控机床自动运行前，最应该优先确认的是哪一项？",
+        "id": "onboarding_knowledge_002",
+        "stem": "开机后如果要先稳妥地确认程序是否有问题，通常应该怎么做？",
         "question_type": "single_choice",
-        "options": ["防护门和急停功能处于安全状态", "把进给倍率调到最大", "关闭所有报警提示", "跳过空运行检查"],
-        "answer": "A",
-        "capability_dimension": "safety",
-        "knowledge_points": [
-            {"id": "cnc_lathe.safety.pre_run_check", "name": "自动运行前安全检查", "weight": 1.0}
-        ],
-        "difficulty": "easy",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_programming_001",
-        "stem": "一段完整数控程序通常应使用哪个指令表示程序结束？",
-        "question_type": "single_choice",
-        "options": ["G00", "M30", "F100", "X20"],
-        "answer": "B",
-        "capability_dimension": "programming",
-        "knowledge_points": [
-            {"id": "cnc_lathe.4.1.program_end", "name": "程序结束指令", "weight": 1.0}
-        ],
-        "difficulty": "easy",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_operation_001",
-        "stem": "第一次运行新程序前，较稳妥的操作方式是什么？",
-        "question_type": "single_choice",
-        "options": ["直接全速自动加工", "先进行空运行或仿真检查", "关闭单段运行", "不看坐标直接启动"],
+        "options": ["直接全速加工", "先空运行或做仿真检查", "先把进给调到最大", "直接跳过首件"],
         "answer": "B",
         "capability_dimension": "machining_operation",
         "knowledge_points": [
-            {"id": "cnc_lathe.operation.dry_run", "name": "空运行与试运行", "weight": 1.0}
+            {"id": "cnc_lathe.operation.dry_run", "name": "空运行与仿真检查", "weight": 1.0}
         ],
         "difficulty": "medium",
         "points": 1,
     },
     {
-        "id": "onboarding_quality_001",
-        "stem": "判断加工结果是否合格时，尺寸实测值应主要和什么比较？",
+        "id": "onboarding_knowledge_003",
+        "stem": "判断加工结果是否合格时，应该主要看什么？",
         "question_type": "single_choice",
-        "options": ["同学的经验值", "零件图样的目标尺寸和公差", "机床外观颜色", "材料购买价格"],
+        "options": ["加工时间", "图样尺寸和公差", "机床颜色", "操作者经验"],
         "answer": "B",
         "capability_dimension": "quality_control",
         "knowledge_points": [
@@ -76,62 +102,23 @@ ONBOARDING_QUESTIONS: list[dict[str, Any]] = [
         "points": 1,
     },
     {
-        "id": "onboarding_safety_002",
-        "stem": "进行日常开机前检查时，以下哪项更符合安全要求？",
+        "id": "onboarding_knowledge_004",
+        "stem": "遇到机床报警或异常时，最合适的第一步是什么？",
         "question_type": "single_choice",
-        "options": ["确认防护装置、润滑和冷却状态正常", "先把主轴转速调到最高", "关闭所有报警提示再检查", "跳过空运行直接加工"],
-        "answer": "A",
-        "capability_dimension": "safety",
-        "knowledge_points": [
-            {"id": "cnc_lathe.safety.startup_check", "name": "开机前安全检查", "weight": 1.0}
-        ],
-        "difficulty": "easy",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_safety_003",
-        "stem": "发现机床运行异常或报警后，首先应该怎么做？",
-        "question_type": "single_choice",
-        "options": ["立即停止运行并按规定处理", "继续加工观察一下", "只把报警音关掉", "把进给倍率调到最大"],
-        "answer": "A",
+        "options": ["继续运行看看", "立即停止并按规定处理", "直接关闭所有提示不管", "提高转速再试一次"],
+        "answer": "B",
         "capability_dimension": "safety",
         "knowledge_points": [
             {"id": "cnc_lathe.safety.abnormal_stop", "name": "异常报警与停机处理", "weight": 1.0}
         ],
-        "difficulty": "medium",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_foundations_002",
-        "stem": "数控机床通常由哪三大部分组成？",
-        "question_type": "single_choice",
-        "options": ["机床本体、数控系统、伺服/驱动系统", "刀具、工件、夹具", "冷却液、润滑油、切削液", "显示器、键盘、鼠标"],
-        "answer": "A",
-        "capability_dimension": "foundations",
-        "knowledge_points": [
-            {"id": "cnc_lathe.1.2.machine_composition", "name": "机床组成与控制结构", "weight": 1.0}
-        ],
         "difficulty": "easy",
         "points": 1,
     },
     {
-        "id": "onboarding_foundations_003",
-        "stem": "数控系统的主要作用是什么？",
+        "id": "onboarding_knowledge_005",
+        "stem": "G00 在数控编程里通常表示什么？",
         "question_type": "single_choice",
-        "options": ["接收程序并控制各坐标轴按指令运动", "只负责给机床上油", "只负责显示时间", "只负责夹紧工件"],
-        "answer": "A",
-        "capability_dimension": "foundations",
-        "knowledge_points": [
-            {"id": "cnc_lathe.1.2.nc_system_role", "name": "数控系统的控制作用", "weight": 1.0}
-        ],
-        "difficulty": "easy",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_programming_002",
-        "stem": "在数控编程中，G00 通常表示什么？",
-        "question_type": "single_choice",
-        "options": ["快速定位", "直线插补", "程序结束", "暂停等待"],
+        "options": ["快速定位", "直线插补", "程序结束", "主轴停止"],
         "answer": "A",
         "capability_dimension": "programming",
         "knowledge_points": [
@@ -141,86 +128,8 @@ ONBOARDING_QUESTIONS: list[dict[str, Any]] = [
         "points": 1,
     },
     {
-        "id": "onboarding_operation_002",
-        "stem": "装夹新工件后、正式切削前最稳妥的验证方式是什么？",
-        "question_type": "single_choice",
-        "options": ["先空运行或做仿真检查", "直接全速切削", "先关闭单段运行", "先把刀补清零再启动"],
-        "answer": "A",
-        "capability_dimension": "machining_operation",
-        "knowledge_points": [
-            {"id": "cnc_lathe.operation.dry_run_validation", "name": "空运行验证", "weight": 1.0}
-        ],
-        "difficulty": "medium",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_quality_002",
-        "stem": "如果实测尺寸超出图样公差范围，结果应判定为什么？",
-        "question_type": "single_choice",
-        "options": ["不合格", "合格", "可忽略", "只要表面光洁就算合格"],
-        "answer": "A",
-        "capability_dimension": "quality_control",
-        "knowledge_points": [
-            {"id": "cnc_lathe.quality.out_of_tolerance", "name": "超差判定", "weight": 1.0}
-        ],
-        "difficulty": "medium",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_foundations_004",
-        "stem": "数控车床程序中的坐标值主要用于什么？",
-        "question_type": "single_choice",
-        "options": ["控制刀具和工件的相对运动位置", "记录机床外壳颜色", "提高冷却液压力", "确定表面光洁度"],
-        "answer": "A",
-        "capability_dimension": "foundations",
-        "knowledge_points": [
-            {"id": "cnc_lathe.1.3.coordinate_control", "name": "坐标值控制运动", "weight": 1.0}
-        ],
-        "difficulty": "easy",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_foundations_005",
-        "stem": "工件坐标系通常是在什么基础上建立的？",
-        "question_type": "single_choice",
-        "options": ["工件装夹和编程需求", "机床外壳颜色", "润滑油品牌", "刀具包装方式"],
-        "answer": "A",
-        "capability_dimension": "foundations",
-        "knowledge_points": [
-            {"id": "cnc_lathe.1.3.workpiece_coordinate_system", "name": "工件坐标系", "weight": 1.0}
-        ],
-        "difficulty": "easy",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_safety_004",
-        "stem": "清理切屑时，比较安全的做法是？",
-        "question_type": "single_choice",
-        "options": ["停机后使用专用工具处理", "边加工边徒手拿起", "直接用压缩空气对着人吹", "切削时伸手进入危险区"],
-        "answer": "A",
-        "capability_dimension": "safety",
-        "knowledge_points": [
-            {"id": "cnc_lathe.safety.chip_removal", "name": "切屑清理安全", "weight": 1.0}
-        ],
-        "difficulty": "easy",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_safety_005",
-        "stem": "对工件测量前，首先应该确认什么？",
-        "question_type": "single_choice",
-        "options": ["主轴已停止且刀具远离工件", "先把转速调到最高", "关闭所有报警提示", "先继续切削一个零件"],
-        "answer": "A",
-        "capability_dimension": "safety",
-        "knowledge_points": [
-            {"id": "cnc_lathe.safety.measure_before_stop", "name": "测量前停机确认", "weight": 1.0}
-        ],
-        "difficulty": "medium",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_programming_003",
-        "stem": "在数控编程中，G01 通常表示什么？",
+        "id": "onboarding_knowledge_006",
+        "stem": "G01 在数控编程里通常表示什么？",
         "question_type": "single_choice",
         "options": ["快速定位", "直线插补", "圆弧插补", "程序结束"],
         "answer": "B",
@@ -231,46 +140,25 @@ ONBOARDING_QUESTIONS: list[dict[str, Any]] = [
         "difficulty": "easy",
         "points": 1,
     },
-    {
-        "id": "onboarding_programming_004",
-        "stem": "在数控编程中，M03 通常表示什么？",
-        "question_type": "single_choice",
-        "options": ["主轴正转", "主轴停止", "倒车", "典型显示"],
-        "answer": "A",
-        "capability_dimension": "programming",
-        "knowledge_points": [
-            {"id": "cnc_lathe.4.1.spindle_clockwise", "name": "主轴正转指令", "weight": 1.0}
-        ],
-        "difficulty": "easy",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_operation_003",
-        "stem": "首件加工完成后，最关键的确认步骤是什么？",
-        "question_type": "single_choice",
-        "options": ["按图样复核关键尺寸", "直接批量加工", "先修改所有报警", "先关闭主轴润滑"],
-        "answer": "A",
-        "capability_dimension": "machining_operation",
-        "knowledge_points": [
-            {"id": "cnc_lathe.operation.first_article_check", "name": "首件检验", "weight": 1.0}
-        ],
-        "difficulty": "medium",
-        "points": 1,
-    },
-    {
-        "id": "onboarding_quality_003",
-        "stem": "同一尺寸多次测量差异较大时，首先应该如何处理？",
-        "question_type": "single_choice",
-        "options": ["清洁量具并重复测量", "直接取最大值", "忽略差异继续判定", "只看外观是否光亮"],
-        "answer": "A",
-        "capability_dimension": "quality_control",
-        "knowledge_points": [
-            {"id": "cnc_lathe.quality.remeasure_consistency", "name": "量具清洁与重复测量", "weight": 1.0}
-        ],
-        "difficulty": "medium",
-        "points": 1,
-    },
 ]
+
+ONBOARDING_OPTION_SCORES: dict[str, dict[str, float]] = {
+    "onboarding_background_001": {"A": 0.0, "B": 0.33, "C": 0.67, "D": 1.0},
+    "onboarding_background_002": {"A": 0.0, "B": 0.33, "C": 1.0, "D": 0.67},
+    "onboarding_background_003": {"A": 0.0, "B": 0.33, "C": 0.67, "D": 1.0},
+    "onboarding_background_004": {"A": 0.0, "B": 0.33, "C": 1.0, "D": 0.67},
+    "onboarding_knowledge_001": {"A": 1.0, "B": 0.33, "C": 0.0, "D": 0.0},
+    "onboarding_knowledge_002": {"A": 0.0, "B": 1.0, "C": 0.33, "D": 0.0},
+    "onboarding_knowledge_003": {"A": 0.0, "B": 1.0, "C": 0.33, "D": 0.0},
+    "onboarding_knowledge_004": {"A": 0.0, "B": 1.0, "C": 0.33, "D": 0.0},
+    "onboarding_knowledge_005": {"A": 1.0, "B": 0.33, "C": 0.0, "D": 0.0},
+    "onboarding_knowledge_006": {"A": 0.0, "B": 1.0, "C": 0.33, "D": 0.0},
+}
+
+ONBOARDING_LEVEL_THRESHOLDS = {
+    "beginner": 40,
+    "standard": 80,
+}
 
 _ASSESSMENT_SESSIONS: dict[str, dict[str, Any]] = {}
 
@@ -286,6 +174,7 @@ def create_onboarding_assessment(
         "course_id": course_id,
         "status": "created",
         "created_at": _now(),
+        "scoring_policy": _scoring_policy(),
         "questions": _client_questions(ONBOARDING_QUESTIONS),
     }
     _ASSESSMENT_SESSIONS[session_id] = session
@@ -329,6 +218,7 @@ def score_onboarding_answers(
     dimension_scores = _dimension_scores(scored_items)
     learner_level = _learner_level(overall_score)
     metrics = _metrics_from_dimension_scores(dimension_scores)
+    scoring_policy = _scoring_policy()
     capability_evidence = [_capability_evidence(course_id, assessment_id, item) for item in scored_items]
     knowledge_gap_patches = [_gap_patch(course_id, item) for item in scored_items if not item["correct"]]
     path_assignment = {
@@ -366,7 +256,7 @@ def score_onboarding_answers(
         ],
         "markdown_patch": {
             "section": "初始化测评结果",
-            "content": _assessment_markdown(overall_score, learner_level, metrics, knowledge_gap_patches),
+            "content": _assessment_markdown(overall_score, learner_level, scoring_policy, metrics, knowledge_gap_patches),
         },
     }
     return {
@@ -375,6 +265,7 @@ def score_onboarding_answers(
         "status": "scored",
         "overall_score": overall_score,
         "learner_level": learner_level,
+        "scoring_policy": scoring_policy,
         "dimension_scores": dimension_scores,
         "metrics": metrics,
         "scored_items": scored_items,
@@ -441,19 +332,34 @@ def _client_questions(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _score_question(question: dict[str, Any], answer: str) -> dict[str, Any]:
     correct_answer = str(question.get("answer") or "").strip().upper()
+    option_scores = _option_scores_for(question)
+    selected_score = float(option_scores.get(answer, 0.0))
+    max_score = max(option_scores.values()) if option_scores else 1.0
     correct = bool(answer) and answer == correct_answer
     return {
         "question_id": question["id"],
         "selected_answer": answer,
         "correct_answer": correct_answer,
         "correct": correct,
-        "earned": float(question.get("points") or 1) if correct else 0.0,
+        "selected_score": selected_score,
+        "max_score": max_score,
+        "earned": float(question.get("points") or 1) * selected_score,
         "possible": float(question.get("points") or 1),
         "dimension": str(question.get("capability_dimension") or "foundations"),
         "difficulty": str(question.get("difficulty") or "easy"),
         "knowledge_points": deepcopy(question.get("knowledge_points") or []),
         "stem": str(question.get("stem") or ""),
+        "option_scores": deepcopy(option_scores),
     }
+
+
+def _option_scores_for(question: dict[str, Any]) -> dict[str, float]:
+    question_id = str(question.get("id") or "").strip()
+    scores = ONBOARDING_OPTION_SCORES.get(question_id)
+    if isinstance(scores, dict) and scores:
+        return {str(key).strip().upper(): float(value) for key, value in scores.items()}
+    answer = str(question.get("answer") or "").strip().upper()
+    return {answer: 1.0} if answer else {}
 
 
 def _dimension_scores(scored_items: list[dict[str, Any]]) -> dict[str, float]:
@@ -484,9 +390,9 @@ def _metrics_from_dimension_scores(dimension_scores: dict[str, float]) -> dict[s
 
 
 def _learner_level(overall_score: int) -> str:
-    if overall_score >= 80:
+    if overall_score >= ONBOARDING_LEVEL_THRESHOLDS["standard"]:
         return "advanced"
-    if overall_score >= 50:
+    if overall_score >= ONBOARDING_LEVEL_THRESHOLDS["beginner"]:
         return "standard"
     return "beginner"
 
@@ -550,12 +456,15 @@ def _primary_knowledge_point(item: dict[str, Any]) -> dict[str, str]:
 def _assessment_markdown(
     overall_score: int,
     learner_level: str,
+    scoring_policy: dict[str, Any],
     metrics: dict[str, float],
     gaps: list[dict[str, Any]],
 ) -> str:
     lines = [
         f"- 入门测评总分: {overall_score}",
         f"- 初始学习路径: {learner_level}",
+        f"- 分值规则: A={scoring_policy['option_scores']['A']}, B={scoring_policy['option_scores']['B']}, C={scoring_policy['option_scores']['C']}, D={scoring_policy['option_scores']['D']}",
+        f"- 路径分界: beginner<{ONBOARDING_LEVEL_THRESHOLDS['beginner']} < standard<{ONBOARDING_LEVEL_THRESHOLDS['standard']} <= advanced",
         f"- 理论基础: {metrics['theory_score']}",
         f"- 安全规范: {metrics['safety_score']}",
         f"- 操作与质量: {metrics['operation_score']}",
@@ -566,6 +475,28 @@ def _assessment_markdown(
     else:
         lines.append("- 初始薄弱点: 暂无明显薄弱项。")
     return "\n".join(lines)
+
+
+def _scoring_policy() -> dict[str, Any]:
+    return {
+        "mode": "graded_option_scoring",
+        "option_scores": {
+            "A": 0.0,
+            "B": 0.33,
+            "C": 0.67,
+            "D": 1.0,
+        },
+        "level_thresholds": {
+            "beginner": ONBOARDING_LEVEL_THRESHOLDS["beginner"],
+            "standard": ONBOARDING_LEVEL_THRESHOLDS["standard"],
+            "advanced": 100,
+        },
+        "path_mapping": {
+            "beginner": "beginner",
+            "standard": "standard",
+            "advanced": "advanced",
+        },
+    }
 
 
 def _now() -> str:
