@@ -691,6 +691,9 @@ function masteryLabel(
 function evidenceIsReviewed(item: CapabilityEvidence): boolean {
   if (item.reviewStatus === "rejected") return false;
   if (item.sourceType === "quiz") return item.reviewStatus !== "pending_review";
+  if (item.sourceType === "external_assessment") {
+    return item.reviewStatus === "reviewed" || item.reviewStatus === "auto_verified";
+  }
   return item.reviewStatus === "reviewed";
 }
 
@@ -995,12 +998,13 @@ export function assessmentToScoreMap(
 
 export function capabilityResultList(
   assessment: CapabilityAssessment,
-  level: LearnerProfile["level"],
+  _level: LearnerProfile["level"],
 ): CapabilityDimensionResult[] {
-  return CAPABILITY_DIMENSIONS.filter(
-    (dimension) =>
-      dimension.id !== "advanced_manufacturing" ||
-      level === "advanced" ||
-      assessment.dimensions.advanced_manufacturing.evidenceCount > 0,
-  ).map((dimension) => assessment.dimensions[dimension.id]);
+  void _level;
+  // The v2 capability model always exposes the same eight axes. Missing data
+  // is represented as zero by the profile-score normalizer, never by hiding
+  // a dimension based on the learner's self-declared level.
+  return CAPABILITY_DIMENSIONS.map(
+    (dimension) => assessment.dimensions[dimension.id],
+  );
 }

@@ -291,6 +291,8 @@ def _evidence_is_reviewed(item: dict[str, Any]) -> bool:
         return False
     if item.get("sourceType") == "quiz":
         return item.get("reviewStatus") != "pending_review"
+    if item.get("sourceType") == "external_assessment":
+        return item.get("reviewStatus") in {"reviewed", "auto_verified"}
     return item.get("reviewStatus") == "reviewed"
 
 

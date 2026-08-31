@@ -27,6 +27,7 @@ class RuntimeState(TypedDict, total=False):
 
 
 class InputState(TypedDict, total=False):
+    api_version: str
     request_id: str
     user_id: str
     course_id: str
@@ -34,6 +35,9 @@ class InputState(TypedDict, total=False):
     path_version: str
     assignment_updated_at: str
     learner_level: str
+    learner_profile: dict[str, Any]
+    latest_scores: dict[str, float]
+    learning_progress: dict[str, Any]
     chapter_id: str
     task_id: str
     submission_id: str
@@ -45,6 +49,7 @@ class InputState(TypedDict, total=False):
     quiz_blueprint_input: dict[str, Any]
     retry_count: int
     export_formats: list[str]
+    options: dict[str, Any]
 
 
 class InputRoutingState(TypedDict, total=False):

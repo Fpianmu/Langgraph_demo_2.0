@@ -1,9 +1,32 @@
+# Local configuration and secrets
 .env
-__pycache__/
-*.pyc
-agent/test_onboarding.py
-agent/course_resources/
-agent/rag/storage/local_kb/
+.env.*
+!.env.example
+!web/.env.example
+
+# Python caches and local environments
+**/.venv/
+**/__pycache__/
+*.py[cod]
+
+# Frontend dependencies and build output
 web/node_modules/
+web/dist/
+web/.next/
+web/.vinext/
+web/.wrangler/
+web/.cache/
+*.tsbuildinfo
+
+# Learner runtime data and rebuildable RAG indexes
+web/runtime/
+agent/storage/
+agent/rag/storage/local_kb/indexes/
+
+# Logs and machine-local output
+*.log
 web-start.out
 web-start.err
+
+# Large course videos are provisioned separately from normal Git history
+*.mp4

@@ -118,6 +118,9 @@ JSON 格式:
 task:
 {task}
 
+learner_context:
+{_learner_context_for_prompt(state)}
+
 RAG answer:
 {_rag_answer(state)}
 
@@ -151,6 +154,9 @@ JSON 格式:
 
 task:
 {task}
+
+learner_context:
+{_learner_context_for_prompt(state)}
 
 RAG answer:
 {_rag_answer(state)}
@@ -216,6 +222,9 @@ JSON 格式:
 task:
 {task}
 
+learner_context:
+{_learner_context_for_prompt(state)}
+
 RAG answer:
 {_rag_answer(state)}
 
@@ -256,6 +265,9 @@ conversation_context:
 
 task:
 {task}
+
+learner_context:
+{_learner_context_for_prompt(state)}
 
 RAG answer:
 {_rag_answer(state)}
@@ -581,6 +593,17 @@ def _evidence_for_prompt(state: OverallState) -> str:
 
 def _task(state: OverallState) -> str:
     return str(state.get("task") or state.get("raw_prompt") or state.get("task_draft") or "学习任务").strip()
+
+
+def _learner_context_for_prompt(state: OverallState) -> str:
+    """Expose current frontend context without treating it as assessment evidence."""
+
+    context = {
+        "learner_profile": state.get("learner_profile") or {},
+        "latest_scores": state.get("latest_scores") or {},
+        "learning_progress": state.get("learning_progress") or {},
+    }
+    return json.dumps(context, ensure_ascii=False)
 
 
 def _rag_package(state: OverallState) -> dict[str, Any]:

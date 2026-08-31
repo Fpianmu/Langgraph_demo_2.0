@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 from typing import Any
 
 from agent.tools.profile.capability_assessment_store import CapabilityAssessmentDbStore
 from agent.tools.profile.config import ProfileConfig
 from agent.tools.profile.knowledge_gap_store import KnowledgeGapFileStore
-from agent.tools.profile.markdown_store import ProfileMarkdownStore
+from agent.tools.profile.markdown_store import EDITABLE_PROFILE_SECTIONS, ProfileMarkdownStore
 from agent.tools.profile.path_assignment_store import PathAssignmentFileStore
 from agent.tools.profile.repository import ProfileRepository
 from agent.storage_layout import migrate_legacy_storage
@@ -41,6 +43,10 @@ class ProfileManager:
         )
         capability_assessment_sync = self.capability_assessment_store.sync(user_id)
         knowledge_gaps = self.repository.list_knowledge_gaps(user_id)
+        legacy_gap_patches = _legacy_knowledge_gap_patches(knowledge_gaps)
+        if legacy_gap_patches:
+            self.repository.upsert_knowledge_gaps(user_id, legacy_gap_patches)
+            knowledge_gaps = self.repository.list_knowledge_gaps(user_id)
         knowledge_gap_sync = self.knowledge_gap_store.sync(user_id, knowledge_gaps)
         path_assignments = self.repository.list_path_assignments(user_id)
         path_assignment_sync = self.path_assignment_store.sync(user_id, path_assignments)
@@ -60,6 +66,36 @@ class ProfileManager:
             "path_assignment_files": path_assignment_sync["files"],
             "profile_md_ref": str(self.markdown_store.path_for(user_id)),
             "profile_md_content": markdown,
+        }
+
+    def load_profile_markdown(self, user_id: str) -> dict[str, Any]:
+        self.repository.get_or_create_user(user_id)
+        snapshot = self.markdown_store.snapshot(user_id)
+        return {
+            "user_id": user_id,
+            **snapshot,
+            "editable_sections": list(EDITABLE_PROFILE_SECTIONS),
+            "profile_md_ref": str(self.markdown_store.path_for(user_id)),
+        }
+
+    def update_profile_markdown(
+        self,
+        user_id: str,
+        *,
+        editable_content: str,
+        expected_hash: str,
+    ) -> dict[str, Any]:
+        self.repository.get_or_create_user(user_id)
+        snapshot = self.markdown_store.update_editable_sections(
+            user_id,
+            editable_content=editable_content,
+            expected_hash=expected_hash,
+        )
+        return {
+            "user_id": user_id,
+            **snapshot,
+            "editable_sections": list(EDITABLE_PROFILE_SECTIONS),
+            "profile_md_ref": str(self.markdown_store.path_for(user_id)),
         }
 
     def assign_learning_path(self, user_id: str, assignment: dict[str, Any]) -> dict[str, Any]:
@@ -142,6 +178,19 @@ class ProfileManager:
     def load_resource_difficulty_trace(self, user_id: str, *, limit: int = 200) -> dict[str, Any]:
         context = self.load_profile_context(user_id)
         records = self.repository.list_resource_difficulty_records(user_id, limit=limit)
+        recorded_ids = {str(item.get("resource_id") or "") for item in records}
+        for resource in self.repository.list_generated_resources(user_id):
+            resource_id = str(resource.get("artifact_id") or "")
+            if not resource_id or resource_id in recorded_ids:
+                continue
+            self.record_generated_resource_difficulty(
+                user_id,
+                resource,
+                profile_score=context.get("capability_profile_score", {}),
+                source_node="resource_trace_backfill",
+            )
+            recorded_ids.add(resource_id)
+        records = self.repository.list_resource_difficulty_records(user_id, limit=limit)
         return {
             "user_id": user_id,
             "capability_profile_score": context.get("capability_profile_score", {}),
@@ -149,11 +198,124 @@ class ProfileManager:
             "record_count": len(records),
         }
 
+    def record_generated_resource_difficulty(
+        self,
+        user_id: str,
+        resource: dict[str, Any],
+        *,
+        profile_score: dict[str, Any] | None = None,
+        source_node: str = "verified_persistence_node",
+    ) -> dict[str, Any]:
+        from agent.tools.profile.capability_profile_score import resource_difficulty_for
+
+        resource_id = str(resource.get("artifact_id") or resource.get("resource_id") or "").strip()
+        if not resource_id:
+            raise ValueError("resource artifact_id is required")
+        artifact_type = str(resource.get("artifact_type") or resource.get("resource_type") or "").strip()
+        resource_type = "practice" if artifact_type == "practice_guide" else artifact_type
+        metadata = resource.get("resource_meta") if isinstance(resource.get("resource_meta"), dict) else {}
+        if not metadata:
+            metadata = _json_object(resource.get("metadata_json"))
+        metadata = {
+            **metadata,
+            "title": str(resource.get("title") or metadata.get("title") or ""),
+            "course_id": str(resource.get("course_id") or metadata.get("course_id") or ""),
+        }
+        score = profile_score
+        if not isinstance(score, dict):
+            score = self.load_profile_context(user_id).get("capability_profile_score", {})
+        record = resource_difficulty_for(
+            score,
+            resource_type=resource_type or "default",
+            resource_id=resource_id,
+            chapter_id=str(resource.get("chapter_id") or metadata.get("chapter_id") or ""),
+            source_node=source_node,
+            resource_meta=metadata,
+        )
+        record["record_id"] = f"resource_diff_{_safe_record_id(resource_id)}"
+        return self.record_resource_difficulty(user_id, record)
+
 
 def _list_of_dicts(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _legacy_knowledge_gap_patches(gaps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    patches = []
+    for gap in gaps:
+        chapter_id = str(gap.get("chapter_id") or "").strip()
+        evidence_items = _json_dict_list(gap.get("evidence_items_json"))
+        if chapter_id != "onboarding" and evidence_items:
+            continue
+        patch = dict(gap)
+        if chapter_id == "onboarding" or not chapter_id:
+            patch["chapter_id"] = _chapter_for_legacy_gap(gap)
+        if not evidence_items:
+            patch["evidence_items"] = [
+                {
+                    "knowledge_point_id": str(gap.get("knowledge_point_id") or ""),
+                    "source": str(gap.get("source") or "legacy_profile"),
+                    "evidence": str(gap.get("evidence") or ""),
+                    "migrated_from": chapter_id or "unclassified",
+                }
+            ]
+        patch["recommended_actions"] = _json_string_list(gap.get("recommended_actions_json"))
+        patches.append(patch)
+    return patches
+
+
+def _chapter_for_legacy_gap(gap: dict[str, Any]) -> str:
+    point_id = str(gap.get("knowledge_point_id") or "")
+    match = re.search(r"(?:^|\.)([1-5]\.\d+)(?:\.|$)", point_id)
+    if match:
+        return match.group(1)
+    return {
+        "foundations": "1.1",
+        "safety": "2.1",
+        "machining_operation": "3.1",
+        "programming": "4.1",
+        "process_planning": "4.2",
+        "quality_control": "5.1",
+        "maintenance": "5.2",
+        "advanced_manufacturing": "5.3",
+    }.get(str(gap.get("category") or ""), "1.1")
+
+
+def _json_dict_list(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    try:
+        parsed = json.loads(str(value or "[]"))
+    except json.JSONDecodeError:
+        return []
+    return [item for item in parsed if isinstance(item, dict)] if isinstance(parsed, list) else []
+
+
+def _json_string_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    try:
+        parsed = json.loads(str(value or "[]"))
+    except json.JSONDecodeError:
+        return []
+    return [str(item) for item in parsed if str(item).strip()] if isinstance(parsed, list) else []
+
+
+def _json_object(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    try:
+        parsed = json.loads(str(value or "{}"))
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _safe_record_id(value: str) -> str:
+    token = re.sub(r"[^0-9A-Za-z_.-]+", "_", str(value).strip()).strip("_")
+    return token or "resource"
 
 
 def _path_assignment_markdown(assignments: list[dict[str, Any]]) -> str:

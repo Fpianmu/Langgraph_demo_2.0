@@ -366,13 +366,12 @@ export function createQuizSession(input: {
       ...(question.rag_chunk_ids ?? []),
       ...retrieval.ragChunkIds,
     ]),
-    source_grounding_scope: (
+    source_grounding_scope:
       question.source_refs?.length || question.rag_chunk_ids?.length
         ? "question"
         : retrieval.sourceRefs.length || retrieval.ragChunkIds.length
           ? "session"
-          : "none"
-    ) as QuizSessionQuestion["source_grounding_scope"],
+          : "none",
     };
   });
   return {
@@ -623,6 +622,10 @@ function normalizeQuestion(
       item.source_grounding_scope === "session"
         ? item.source_grounding_scope
         : "none",
+    backend_artifact_id:
+      cleanString(item.backend_artifact_id, 150) || undefined,
+    backend_question_id:
+      cleanString(item.backend_question_id, 150) || undefined,
   };
 }
 

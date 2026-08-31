@@ -10,6 +10,7 @@ from agent.node.personalized_generation.personalization_node import (
     _saved_material_update,
 )
 from agent.state import OverallState
+from agent.tools.profile.manager import ProfileManager
 
 
 @log_node_runtime("verified_persistence_node")
@@ -40,4 +41,28 @@ def verified_persistence_node(state: OverallState) -> OverallState:
             update.update(_saved_material_update("qa", saved))
     if saved_outputs:
         update["saved_outputs"] = saved_outputs
+        _record_resource_difficulties(state, saved_outputs)
     return update
+
+
+def _record_resource_difficulties(state: OverallState, saved_outputs: dict[str, object]) -> None:
+    user_id = str(state.get("user_id") or "").strip()
+    if not user_id:
+        return
+    manager = ProfileManager(state.get("_storage_root"))
+    profile_score = manager.load_profile_context(user_id).get("capability_profile_score", {})
+    for content_type, value in saved_outputs.items():
+        if content_type not in {"lecture", "practice", "quiz"} or not isinstance(value, dict):
+            continue
+        manager.record_generated_resource_difficulty(
+            user_id,
+            {
+                **value,
+                "artifact_type": content_type,
+                "chapter_id": str(state.get("chapter_id") or ""),
+                "course_id": str(state.get("course_id") or ""),
+                "title": str(value.get("title") or ""),
+            },
+            profile_score=profile_score,
+            source_node="verified_persistence_node",
+        )

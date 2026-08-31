@@ -144,6 +144,10 @@ def gap_focus_analysis_node(state: OverallState) -> OverallState:
 
 @log_node_runtime("chapter_resource_loader_node")
 def chapter_resource_loader_node(state: OverallState) -> OverallState:
+    return _load_chapter_resource_context(state)
+
+
+def _load_chapter_resource_context(state: OverallState) -> OverallState:
     course_id = str(state.get("course_id") or "cnc_lathe")
     chapter_id = str(state.get("chapter_id") or "").strip()
     resource_root = state.get("_course_resource_root")
@@ -211,6 +215,7 @@ def quiz_adaptation_context_node(state: OverallState) -> OverallState:
         "user_quantitative_profile": {
             "average_score": average_score,
             "capability_profile_score": profile_score,
+            "learning_progress": state.get("learning_progress") or {},
         },
         "quiz_difficulty_policy": policy,
         "quiz_reference_examples": state.get("reference_quiz") if isinstance(state.get("reference_quiz"), dict) else {},
@@ -222,7 +227,13 @@ def quiz_adaptation_context_node(state: OverallState) -> OverallState:
 def quiz_context_adapter_node(state: OverallState) -> OverallState:
     rag_package = state.get("rag_package") if isinstance(state.get("rag_package"), dict) else {}
     task = str(state.get("quiz_generation_prompt") or state.get("task") or state.get("raw_prompt") or "").strip()
+    resource_context = _load_chapter_resource_context(state)
+    bundle = resource_context.get("course_resource_bundle")
+    manifest = bundle.get("chapter_manifest") if isinstance(bundle, dict) else {}
+    chapter_focus = manifest.get("focus") if isinstance(manifest, dict) else {}
     return {
+        **resource_context,
+        "chapter_focus": chapter_focus if isinstance(chapter_focus, dict) else {},
         "quiz_rag_package": rag_package,
         "quiz_rag_evidence": [item for item in rag_package.get("evidence") or [] if isinstance(item, dict)],
         "patch_rag_package": {},
@@ -234,6 +245,8 @@ def quiz_context_adapter_node(state: OverallState) -> OverallState:
             "source": "rag_package",
             "task": task,
             "has_quiz_rag": bool(rag_package),
+            "has_chapter_resources": resource_context.get("chapter_resource_load_result", {}).get("status") == "success",
+            "has_reference_quiz": bool(resource_context.get("reference_quiz")),
         },
     }
 
@@ -511,10 +524,19 @@ def quiz_schema_normalizer_node(state: OverallState) -> OverallState:
         if question_errors:
             errors.extend(question_errors)
         normalized.append(question)
+    if slots and len(normalized) != len(slots):
+        errors.append(
+            {
+                "reason": "question_count_mismatch",
+                "expected": len(slots),
+                "actual": len(normalized),
+            }
+        )
     output["questions"] = normalized
     output["meta"] = {
         **(output.get("meta") if isinstance(output.get("meta"), dict) else {}),
         "schema_normalizer": "applied",
+        "status": "success" if not errors else "validation_error",
     }
     return {
         "typed_quiz_output": output,
@@ -571,7 +593,7 @@ def quiz_material_adapter_node(state: OverallState) -> OverallState:
         "title": str(output.get("title") or _title_for(state, "quiz")),
         "summary": str(output.get("summary") or "根据测验蓝图生成的多题型测试题。"),
         "payload": {"questions": [item for item in questions if isinstance(item, dict)]},
-        "evidence_refs": [],
+        "evidence_refs": _quiz_evidence_refs(state),
         "safety_notes": [],
         "next_actions": [],
     }
@@ -789,6 +811,9 @@ chapter_focus:
 
 knowledge_gap_documents:
 {json.dumps(state.get("knowledge_gap_documents") or {}, ensure_ascii=False)}
+
+learning_progress:
+{json.dumps(state.get("learning_progress") or {}, ensure_ascii=False)}
 """.strip()
 
 
@@ -932,6 +957,9 @@ summary, base_content, knowledge_gap_patches, and learning_guidance.
 
 profile_md:
 {state.get("profile_md_content") or ""}
+
+learning_progress:
+{json.dumps(state.get("learning_progress") or {}, ensure_ascii=False)}
 
 progress_patch_materials:
 {json.dumps(patch_materials, ensure_ascii=False)}
@@ -1998,7 +2026,9 @@ def _normalize_question_for_schema(
     item["detailed_explanation"] = str(item.get("detailed_explanation") or item.get("explanation") or "").strip()
     if question_type == "true_false":
         item["options"] = ["正确", "错误"]
-        item["answer"] = _normalize_true_false_answer(item.get("answer") or item.get("reference_answer"))
+        item["answer"] = _normalize_true_false_answer(item.get("answer")) or _normalize_true_false_answer(
+            item.get("reference_answer")
+        )
         item["reference_answer"] = "正确" if item["answer"] == "A" else "错误" if item["answer"] == "B" else ""
         if item["answer"] not in {"A", "B"}:
             errors.append({"sequence": sequence, "reason": "invalid_true_false_answer"})
@@ -2052,6 +2082,36 @@ def _normalize_true_false_answer(value: Any) -> str:
     if token in {"b", "错误", "错", "否", "false", "no", "0", "×", "x"}:
         return "B"
     return ""
+
+
+def _quiz_evidence_refs(state: OverallState) -> list[dict[str, str]]:
+    refs: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for key in ("quiz_rag_package", "rag_package"):
+        package = state.get(key)
+        evidence = package.get("evidence") if isinstance(package, dict) else []
+        for item in evidence if isinstance(evidence, list) else []:
+            if not isinstance(item, dict):
+                continue
+            source = str(item.get("source_file") or item.get("source_doc") or "").strip()
+            chunk_id = str(item.get("chunk_id") or "").strip()
+            identity = (source, chunk_id)
+            if not (source or chunk_id) or identity in seen:
+                continue
+            seen.add(identity)
+            refs.append({"source_doc": source, "chunk_id": chunk_id})
+    reference_quiz = state.get("reference_quiz")
+    questions = reference_quiz.get("questions") if isinstance(reference_quiz, dict) else []
+    for index, question in enumerate(questions if isinstance(questions, list) else [], start=1):
+        if not isinstance(question, dict):
+            continue
+        question_id = str(question.get("question_id") or f"question_{index:04d}")
+        identity = ("reference_quiz", question_id)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        refs.append({"source_doc": "reference_quiz", "chunk_id": f"reference_quiz:{question_id}"})
+    return refs[:50]
 
 
 def _normalize_scoring_rubric(value: Any, points: float) -> dict[str, Any]:

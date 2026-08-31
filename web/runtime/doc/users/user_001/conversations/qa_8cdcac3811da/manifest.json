@@ -1,0 +1,11 @@
+{
+  "session_id": "qa_8cdcac3811da",
+  "user_id": "user_001",
+  "course_id": "cnc_lathe",
+  "title": "数控车床主轴、进给系统和伺服系统的作用解析（面向机械类本科生）",
+  "artifact_type": "qa_session",
+  "files": {
+    "messages": "messages.jsonl",
+    "transcript": "transcript.md"
+  }
+}

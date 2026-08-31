@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
+import re
 from typing import Any
 from uuid import uuid4
 
@@ -399,6 +400,7 @@ def _learner_level(overall_score: int) -> str:
 
 def _capability_evidence(course_id: str, assessment_id: str, item: dict[str, Any]) -> dict[str, Any]:
     point = _primary_knowledge_point(item)
+    chapter_id = _chapter_for_knowledge_point(point["id"], item["dimension"])
     return {
         "id": f"{assessment_id}-{item['question_id']}",
         "attemptId": assessment_id,
@@ -419,28 +421,56 @@ def _capability_evidence(course_id: str, assessment_id: str, item: dict[str, Any
         "itemRevision": item["question_id"],
         "dimensionSource": "declared",
         "questionGrounded": True,
-        "reviewStatus": "auto_verified",
-        "chapterId": "onboarding",
-        "objectiveIds": [f"onboarding:{item['dimension']}"],
+        "reviewStatus": "reviewed",
+        "reviewedBy": "onboarding_deterministic_grader",
+        "chapterId": chapter_id,
+        "objectiveIds": [f"{chapter_id}:{item['dimension']}"],
         "coreExamPoints": [point["name"]],
     }
 
 
 def _gap_patch(course_id: str, item: dict[str, Any]) -> dict[str, Any]:
     point = _primary_knowledge_point(item)
+    chapter_id = _chapter_for_knowledge_point(point["id"], item["dimension"])
     return {
         "gap_id": f"gap_onboarding_{course_id}_{point['id'].replace('.', '_')}",
         "knowledge_point_id": point["id"],
         "concept": point["name"],
-        "chapter_id": "onboarding",
+        "chapter_id": chapter_id,
         "category": item["dimension"],
         "severity": "high" if item["difficulty"] == "easy" else "medium",
         "score": 0.0,
         "evidence": f"入门测评题目 {item['question_id']} 作答错误。",
+        "evidence_items": [
+            {
+                "assessment_item_id": item["question_id"],
+                "knowledge_point_id": point["id"],
+                "correct": False,
+                "earned": float(item["earned"]),
+                "possible": float(item["possible"]),
+                "source": "onboarding_assessment",
+            }
+        ],
         "status": "open",
         "source": "onboarding_assessment",
         "recommended_actions": [f"优先复习“{point['name']}”相关基础内容。"],
     }
+
+
+def _chapter_for_knowledge_point(point_id: str, dimension: str) -> str:
+    match = re.search(r"(?:^|\.)([1-5]\.\d+)(?:\.|$)", str(point_id or ""))
+    if match:
+        return match.group(1)
+    return {
+        "foundations": "1.1",
+        "safety": "2.1",
+        "machining_operation": "3.1",
+        "programming": "4.1",
+        "process_planning": "4.2",
+        "quality_control": "5.1",
+        "maintenance": "5.2",
+        "advanced_manufacturing": "5.3",
+    }.get(str(dimension or ""), "1.1")
 
 
 def _primary_knowledge_point(item: dict[str, Any]) -> dict[str, str]:

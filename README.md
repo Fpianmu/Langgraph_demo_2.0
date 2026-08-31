@@ -4,6 +4,38 @@
 
 当前版本主要服务于前后端联调和 Agent 工作流验证，尚不是完整生产 API 服务。
 
+## 知链 v2 集成运行
+
+本仓库现在同时包含第二版 LangGraph 后端与知链前端：后端位于 `agent/`，前端位于
+`web/`。前端统一使用任务生命周期接口创建任务、监听 Agent 活动并读取结构化结果：
+
+1. `POST /api/graph/runs`
+2. `GET /api/graph/runs/{run_id}/events`
+3. `GET /api/graph/runs/{run_id}/result`
+
+首次运行后端：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
+# 在 .env 中填写 DEEPSEEK_API_KEY
+.\.venv\Scripts\python.exe -m uvicorn agent.api:app --host 127.0.0.1 --port 8000
+```
+
+首次运行前端：
+
+```powershell
+Set-Location web
+Copy-Item .env.example .env.local
+npm ci
+npm run dev
+```
+
+浏览器访问 `http://127.0.0.1:3000`。学习者运行数据写入 `web/runtime/`，该目录、
+本机密钥、RAG 可重建索引和构建产物均不会提交到 Git。课程文本、图片、章节清单与
+RAG 原始资料会随仓库版本化；体积较大的 `*.mp4` 课程视频需单独配置。
+
 ## 功能概览
 
 当前后端支持以下能力：

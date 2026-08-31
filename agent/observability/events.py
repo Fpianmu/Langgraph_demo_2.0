@@ -67,8 +67,11 @@ class AgentEventFactory:
     def run_started(self) -> dict[str, Any]:
         return self._base("run.started")
 
-    def run_completed(self) -> dict[str, Any]:
-        return self._base("run.completed")
+    def run_completed(self, *, result_url: str | None = None) -> dict[str, Any]:
+        event = self._base("run.completed")
+        if result_url:
+            event["result_url"] = result_url
+        return event
 
     def agent_activity(
         self,

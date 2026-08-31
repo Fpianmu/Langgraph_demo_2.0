@@ -12,6 +12,10 @@ export type LearningStageId = "l1" | "l2" | "l3" | "job_ready";
 
 export type LearningProgressInputs = {
   assessment: CapabilityAssessment;
+  capabilityProfileScore?: {
+    overall: number;
+    dimensions: Partial<Record<CapabilityDimensionId, number>>;
+  };
   capabilityEvidence?: CapabilityEvidence[];
   profile: LearnerProfile;
   chatQuestionCount: number;
@@ -368,7 +372,10 @@ export function calculateLearningProgress(
   for (const dimension of PROGRESS_DIMENSIONS) {
     const result = assessment.dimensions[dimension.id];
     const weight = JOB_READINESS_WEIGHTS[dimension.id];
-    provisionalMastery += (result.score ?? 0) * (weight / 100);
+    const primaryScore = input.capabilityProfileScore
+      ? numeric(input.capabilityProfileScore.dimensions[dimension.id])
+      : result.score ?? 0;
+    provisionalMastery += primaryScore * (weight / 100);
     if (result.ratingReady) {
       weightedMastery += (result.score ?? 0) * (weight / 100);
       verifiedWeight += weight;
@@ -376,7 +383,9 @@ export function calculateLearningProgress(
     weightedConfidence += result.confidence * weight;
   }
   weightedMastery = Math.round(weightedMastery);
-  provisionalMastery = Math.round(provisionalMastery);
+  provisionalMastery = input.capabilityProfileScore
+    ? Math.round(numeric(input.capabilityProfileScore.overall))
+    : Math.round(provisionalMastery);
   weightedConfidence = Math.round(weightedConfidence);
   const course = courseState(input.courseProgress ?? []);
 
@@ -444,7 +453,9 @@ export function calculateLearningProgress(
     return {
       id: definition.id,
       label: definition.label,
-      score: result.score,
+      score: input.capabilityProfileScore
+        ? numeric(input.capabilityProfileScore.dimensions[definition.id])
+        : result.score,
       observedScore: result.observedScore,
       ratingStatus: result.ratingStatus,
       confidence: Math.round(result.confidence * 100),

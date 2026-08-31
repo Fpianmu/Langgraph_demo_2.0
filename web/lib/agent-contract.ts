@@ -21,7 +21,7 @@ export type LearnerProfile = {
 };
 
 export type AgentRequest = {
-  api_version: "v1";
+  api_version: "v2";
   request_id: string;
   user_id: string;
   course_id: string;
@@ -32,6 +32,7 @@ export type AgentRequest = {
   latest_scores: ScoreMap;
   learner_profile: LearnerProfile;
   learning_progress?: Record<string, unknown>;
+  quiz_blueprint_input?: Record<string, unknown>;
   profile_md_ref?: string;
   profile_md_version?: string;
   profile_md_hash?: string;
@@ -66,13 +67,16 @@ export type QuizQuestion = {
     }>;
     required_terms?: string[];
   };
-  /** Optional v1-compatible metadata used by deterministic capability scoring. */
+  /** Metadata used by deterministic capability scoring. */
   capability_dimension?: string;
   knowledge_point?: string;
   source_refs?: string[];
   rag_chunk_ids?: string[];
   /** Whether sources were attached to this item or inherited from the batch. */
   source_grounding_scope?: "question" | "session" | "none";
+  /** Backend persistence references. They never affect question rendering. */
+  backend_artifact_id?: string;
+  backend_question_id?: string;
 };
 
 export type QaPayload = {
@@ -120,7 +124,7 @@ export type ProfileUpdateSuggestions = {
 };
 
 export type AgentResponse = {
-  api_version: "v1";
+  api_version: "v2";
   request_id: string;
   status:
     | "success"
@@ -207,4 +211,5 @@ export type OrchestratorInput = {
   chapterId?: string;
   qaSessionId?: string;
   learningProgress?: Record<string, unknown>;
+  quizBlueprint?: Record<string, unknown>;
 };

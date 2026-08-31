@@ -21,6 +21,13 @@ import {
   buildAgentRequest,
   dispatchToCentralOrchestrator,
 } from "@/lib/orchestrator-client";
+import type {
+  AgentActivityEvent,
+  AgentMessageEvent,
+  GraphPayloadRefs,
+  GraphRunEvent,
+  GraphRunStatus,
+} from "@/lib/graph-run-client";
 import {
   checkBackendHealth,
   mergeBackendProfile,
@@ -43,6 +50,23 @@ import {
   type UserIdentity,
 } from "@/components/UserIdentity";
 import { MarkdownContent } from "@/components/MarkdownContent";
+import { UserCenterView } from "@/components/UserCenterView";
+import { UserAccessDialog } from "@/components/UserAccessDialog";
+import { listUsers, type UserSummary } from "@/lib/user-client";
+import {
+  loadUserLearningPath,
+  type LearningPathChapter,
+  type UserLearningPath,
+} from "@/lib/learning-path-client";
+import {
+  loadCapabilityScores,
+  type CapabilityScoresState,
+} from "@/lib/capability-score-client";
+import {
+  loadBackendKnowledgeGaps,
+  normalizeKnowledgeGapItems,
+  type KnowledgeGapState,
+} from "@/lib/knowledge-gap-client";
 import {
   ASSESSMENT_MODEL_VERSION,
   assessmentToScoreMap,
@@ -73,6 +97,10 @@ import {
 } from "@/lib/quiz-session";
 import { gradeSubjectiveQuizAnswer } from "@/lib/quiz-grading-client";
 import {
+  submitPersistedQuizAttempts,
+  syncQuizProfileEvidence,
+} from "@/lib/quiz-persistence-client";
+import {
   batchQuizBlueprint,
   createQuizBlueprint,
   DEFAULT_QUIZ_QUESTION_COUNT,
@@ -85,11 +113,11 @@ import {
   type QuizBlueprintItem,
   type QuizQuestionType,
 } from "@/lib/quiz-blueprint";
-import { storageMarkdownBaseUrl } from "@/lib/storage-url";
 import {
   COURSE_PHASES,
   calculateLearningProgress,
   type LearningProgressResult,
+  type ProgressGate,
 } from "@/lib/learning-progress";
 import {
   calculateLectureMastery,
@@ -142,10 +170,15 @@ const DEFAULT_SCORES: ScoreMap = assessmentToScoreMap(
   "beginner",
 );
 
-const ACTIVE_USER_ID = "user_001";
 const ACTIVE_COURSE_ID = "cnc_lathe";
 const ACTIVE_CHAPTER_ID = "1.1";
 const QA_CONTEXT_VERSION = "cnc-domain-v2";
+const SIDEBAR_PREFERENCE_KEY = "zlink-sidebar-collapsed-v1";
+const CHAT_HISTORY_PANEL_PREFERENCE_KEY = "zlink-chat-history-panel-collapsed-v1";
+const MEMORY_LOG_PANEL_PREFERENCE_KEY = "zlink-memory-log-panel-collapsed-v1";
+const QUIZ_CONFIG_PANEL_PREFERENCE_KEY = "zlink-quiz-config-panel-collapsed-v1";
+const ACTIVE_USER_PREFERENCE_KEY = "zlink-active-user-id-v1";
+const WORKSPACE_CACHE_PREFIX = "knowledge-chain-memory-v1";
 
 const TRACE_LABELS: Record<string, string> = {
   input_normalizer: "输入规范化",
@@ -166,6 +199,33 @@ const TRACE_LABELS: Record<string, string> = {
   learning_status_router: "学情任务路由",
   feedback_node: "学情反馈与画像更新",
   progress_advance_node: "学习进度推进",
+};
+
+const AGENT_LABELS: Record<string, string> = {
+  task_dispatch: "任务调度 Agent",
+  knowledge_generation: "知识检索与生成 Agent",
+  learning_management: "学情管理 Agent",
+  personalized_generation: "个性化生成 Agent",
+  hallucination_elimination: "幻觉消除 Agent",
+  practice_evaluation: "实训评估 Agent",
+};
+
+const RUN_STATUS_LABELS: Record<GraphRunStatus, string> = {
+  idle: "等待任务",
+  created: "任务已创建",
+  running: "协作运行中",
+  completed: "运行已完成",
+  failed: "运行失败",
+  cancelled: "运行已取消",
+};
+
+const PAYLOAD_REF_LABELS: Record<string, string> = {
+  route_decision: "路由决策",
+  evidence_count: "检索证据",
+  claim_count: "待核声明",
+  artifact_paths: "生成产物",
+  verification_decision: "校验结论",
+  profile_update_summary: "画像更新",
 };
 
 const PENDING_TRACE: AgentTrace[] = [
@@ -205,15 +265,34 @@ function uid(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}`;
 }
 
+function learningMaterialLabel(materialType: string): string {
+  const labels: Record<string, string> = {
+    lecture: "学习讲义",
+    quiz: "Quiz 测评",
+    practice: "实训练习",
+    simulation: "仿真训练",
+    qa: "问答辅导",
+  };
+  return labels[materialType] || materialType;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : null;
 }
 
-function readLocalWorkspaceCache(): LocalWorkspaceCache | null {
+function workspaceCacheKey(userId: string): string {
+  return `${WORKSPACE_CACHE_PREFIX}:${userId}`;
+}
+
+function readLocalWorkspaceCache(userId: string): LocalWorkspaceCache | null {
   try {
-    const raw = window.localStorage.getItem("knowledge-chain-memory-v1");
+    const raw =
+      window.localStorage.getItem(workspaceCacheKey(userId)) ||
+      (userId === "user_001"
+        ? window.localStorage.getItem(WORKSPACE_CACHE_PREFIX)
+        : null);
     const root = raw ? asRecord(JSON.parse(raw)) : null;
     if (!root) return null;
 
@@ -354,16 +433,44 @@ function materialCandidates(
   const specificKeys =
     kind === "qa"
       ? ["personalized_qa_output", "final_qa_output"]
-      : ["personalized_question_output", "final_question_output"];
+      : ["final_question_output", "personalized_question_output"];
 
   return [
-    finalOutput,
     ...specificKeys.map((key) => root?.[key]),
-    finalMaterials?.[kind],
+    finalOutput,
     nestedMaterials?.[kind],
+    finalMaterials?.[kind],
   ]
     .map(asRecord)
-    .filter((item): item is Record<string, unknown> => !!item);
+    .filter(
+      (item): item is Record<string, unknown> =>
+        !!item && !isRejectedAgentMaterial(item),
+    );
+}
+
+function isRejectedAgentMaterial(material: Record<string, unknown>): boolean {
+  const meta = asRecord(material.meta);
+  const statuses = [meta?.status, meta?.verification_status]
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim().toLowerCase());
+  return statuses.some((status) =>
+    ["rejected", "validation_error", "failed", "error"].includes(status),
+  );
+}
+
+function assertSuccessfulAgentResponse(
+  response: AgentResponse,
+  materialLabel: string,
+) {
+  if (response.status === "success") return;
+  const reason =
+    typeof response.check_report?.summary === "string"
+      ? response.check_report.summary.trim()
+      : "";
+  throw new Error(
+    reason ||
+      `中央调度器未返回可用${materialLabel}（状态：${response.status || "unknown"}）`,
+  );
 }
 
 function asQaPayload(response: AgentResponse) {
@@ -411,6 +518,16 @@ function applyBlueprintToQuestion(
 ): QuizQuestion {
   const questionType = slot.questionType;
   const options = Array.isArray(question.options) ? question.options : [];
+  const rawQuestion = asRecord(question);
+  const rawKnowledgePoints = Array.isArray(rawQuestion?.knowledge_points)
+    ? rawQuestion.knowledge_points
+    : [];
+  const firstKnowledgePoint = rawKnowledgePoints[0];
+  const knowledgePointRecord = asRecord(firstKnowledgePoint);
+  const knowledgePoint =
+    (typeof question.knowledge_point === "string" && question.knowledge_point.trim()) ||
+    (typeof firstKnowledgePoint === "string" && firstKnowledgePoint.trim()) ||
+    String(knowledgePointRecord?.name || knowledgePointRecord?.id || "").trim();
   const normalized = normalizeTrueFalseQuestion({
     ...question,
     question_type: questionType,
@@ -424,6 +541,7 @@ function applyBlueprintToQuestion(
     difficulty: slot.difficulty,
     points: slot.points,
     capability_dimension: slot.capabilityDimension,
+    knowledge_point: knowledgePoint || undefined,
   });
   if (questionType === "true_false" && !normalized.answer) {
     throw new Error(
@@ -503,6 +621,17 @@ function assessmentEvidenceForSession(
   });
 }
 
+function capabilityEvidenceSyncKey(
+  userId: string,
+  evidence: CapabilityEvidence[],
+): string {
+  return `${userId}:${evidence
+    .filter((item) => item.sourceType === "quiz")
+    .map((item) => `${item.id}:${item.reviewStatus}:${item.earned}/${item.possible}`)
+    .sort()
+    .join("|")}`;
+}
+
 function connectionText(state: ConnectionState): string {
   if (state === "checking") return "正在连接中央调度器";
   if (state === "live") return "中央调度器已连接";
@@ -510,8 +639,36 @@ function connectionText(state: ConnectionState): string {
   return "中央调度器待验证";
 }
 
+function SidebarToggleButton({
+  collapsed,
+  onToggle,
+  className = "",
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  const label = collapsed ? "展开边栏" : "隐藏边栏";
+  return (
+    <button
+      type="button"
+      className={`sidebar-toggle ${className}`.trim()}
+      aria-controls="zlink-sidebar"
+      aria-expanded={!collapsed}
+      aria-label={label}
+      title={label}
+      onClick={onToggle}
+    >
+      <span className="sidebar-toggle-icon" aria-hidden="true" />
+    </button>
+  );
+}
+
 export default function LearningWorkspace() {
-  const [activeView, setActiveView] = useState<View>("chat");
+  const [activeView, setActiveView] = useState<View>("progress");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarPreferenceReady, setSidebarPreferenceReady] = useState(false);
+  const [moreInfoOpen, setMoreInfoOpen] = useState(false);
   const [profile, setProfile] = useState<LearnerProfile>(DEFAULT_PROFILE);
   const [capabilityEvidence, setCapabilityEvidence] = useState<
     CapabilityEvidence[]
@@ -526,6 +683,10 @@ export default function LearningWorkspace() {
   const [backendCourseProgress, setBackendCourseProgress] = useState<
     Array<Record<string, unknown>>
   >([]);
+  const [backendCapabilityScores, setBackendCapabilityScores] =
+    useState<CapabilityScoresState | null>(null);
+  const [backendKnowledgeGapState, setBackendKnowledgeGapState] =
+    useState<KnowledgeGapState | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
   const [history, setHistory] = useState<string[]>([]);
   const [memoryEvents, setMemoryEvents] = useState<MemoryEvent[]>([
@@ -542,6 +703,9 @@ export default function LearningWorkspace() {
   const [connection, setConnection] = useState<ConnectionState>("checking");
   const [busy, setBusy] = useState(false);
   const [trace, setTrace] = useState<AgentTrace[]>([]);
+  const [graphEvents, setGraphEvents] = useState<GraphRunEvent[]>([]);
+  const [activeRunId, setActiveRunId] = useState("");
+  const [graphRunStatus, setGraphRunStatus] = useState<GraphRunStatus>("idle");
   const [lastResponse, setLastResponse] = useState<AgentResponse | null>(null);
   const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(
     null,
@@ -552,33 +716,102 @@ export default function LearningWorkspace() {
   const [qaSessionId, setQaSessionId] = useState("");
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [activeUserId, setActiveUserId] = useState("");
+  const [users, setUsers] = useState<UserSummary[]>([]);
+  const [userDialog, setUserDialog] = useState<"switch" | "create" | null>(null);
+  const [userLearningPath, setUserLearningPath] = useState<UserLearningPath | null>(null);
+  const [learningPathLoading, setLearningPathLoading] = useState(false);
+  const [learningPathError, setLearningPathError] = useState("");
   const persistenceRevision = useRef(0);
+  const profileEvidenceSyncKey = useRef("");
 
-  const capabilityAssessment = useMemo(
+  useEffect(() => {
+    try {
+      // Restoring a device-local layout preference requires one client-only update.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSidebarCollapsed(
+        window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === "true",
+      );
+    } catch {
+      // Keep the sidebar open if browser preferences are unavailable.
+    } finally {
+      setSidebarPreferenceReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarPreferenceReady) return;
+    try {
+      window.localStorage.setItem(
+        SIDEBAR_PREFERENCE_KEY,
+        String(sidebarCollapsed),
+      );
+    } catch {
+      // The preference is optional and must not block the learning workspace.
+    }
+  }, [sidebarCollapsed, sidebarPreferenceReady]);
+
+  const localCapabilityAssessment = useMemo(
     () => calculateCapabilityAssessment(capabilityEvidence),
     [capabilityEvidence],
   );
+  const activeBackendCapabilityScores =
+    backendCapabilityScores?.userId === activeUserId
+      ? backendCapabilityScores
+      : null;
+  const capabilityAssessment =
+    activeBackendCapabilityScores?.assessment ?? localCapabilityAssessment;
+  const effectiveCapabilityEvidence =
+    activeBackendCapabilityScores?.evidence ?? capabilityEvidence;
+  const activeKnowledgeGapState =
+    backendKnowledgeGapState?.userId === activeUserId
+      ? backendKnowledgeGapState
+      : null;
+  const effectiveKnowledgeGaps = useMemo(
+    () =>
+      activeKnowledgeGapState?.knowledgeGaps ??
+      normalizeKnowledgeGapItems(backendKnowledgeGaps),
+    [activeKnowledgeGapState?.knowledgeGaps, backendKnowledgeGaps],
+  );
+  const progressKnowledgeGaps = useMemo(
+    () =>
+      effectiveKnowledgeGaps.map((gap) => ({
+        gap_id: gap.id,
+        status: gap.status,
+        dimension: gap.category,
+        topic: gap.concept,
+        knowledge_point: gap.knowledgePointId,
+        description: gap.evidence,
+        title: gap.concept,
+        severity: gap.severity,
+      })),
+    [effectiveKnowledgeGaps],
+  );
   const scores = useMemo(
-    () => assessmentToScoreMap(capabilityAssessment, profile.level),
-    [capabilityAssessment, profile.level],
+    () =>
+      activeBackendCapabilityScores?.scores ??
+      assessmentToScoreMap(localCapabilityAssessment, profile.level),
+    [activeBackendCapabilityScores?.scores, localCapabilityAssessment, profile.level],
   );
   const learningProgress = useMemo(
     () =>
       calculateLearningProgress({
         assessment: capabilityAssessment,
-        capabilityEvidence,
+        capabilityProfileScore: activeBackendCapabilityScores?.profileScore,
+        capabilityEvidence: effectiveCapabilityEvidence,
         profile,
         chatQuestionCount: messages.filter((message) => message.role === "user").length,
         memoryEventCount: memoryEvents.length,
         quizSessionCount: quizSessions.length,
-        knowledgeGaps: backendKnowledgeGaps,
+        knowledgeGaps: progressKnowledgeGaps,
         courseProgress: backendCourseProgress,
       }),
     [
       backendCourseProgress,
-      backendKnowledgeGaps,
+      progressKnowledgeGaps,
+      activeBackendCapabilityScores?.profileScore,
       capabilityAssessment,
-      capabilityEvidence,
+      effectiveCapabilityEvidence,
       memoryEvents.length,
       messages,
       profile,
@@ -640,13 +873,89 @@ export default function LearningWorkspace() {
     [lastResponse?.rag_package, memoryEvents, profile, scores],
   );
 
+  const resetWorkspace = useCallback((user?: UserSummary) => {
+    setProfile({
+      ...DEFAULT_PROFILE,
+      background: user?.background_type || DEFAULT_PROFILE.background,
+    });
+    setCapabilityEvidence([]);
+    setQuizSessions([]);
+    setActiveQuizSessionId("");
+    setLectureSessions([]);
+    setActiveLectureSessionId("");
+    setBackendKnowledgeGaps([]);
+    setBackendCourseProgress([]);
+    setBackendCapabilityScores(null);
+    setBackendKnowledgeGapState(null);
+    setMessages([INITIAL_MESSAGE]);
+    setHistory([]);
+    setMemoryEvents([
+      {
+        id: "initial-memory",
+        title: "初始画像已建立",
+        detail: "已记录学习背景、当前水平和表达偏好。",
+        time: "当前设备",
+      },
+    ]);
+    setPendingSuggestions([]);
+    setTrace([]);
+    setGraphEvents([]);
+    setActiveRunId("");
+    setGraphRunStatus("idle");
+    setLastResponse(null);
+    setQaSessionId("");
+    setUserIdentity({
+      ...DEFAULT_USER_IDENTITY,
+      nickname: user?.display_name?.trim() || DEFAULT_USER_IDENTITY.nickname,
+    });
+    persistenceRevision.current = 0;
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    const cached = readLocalWorkspaceCache();
-    Promise.all([checkBackendHealth(), loadBackendWorkspaceState(ACTIVE_USER_ID)])
-      .then(([health, backendState]) => {
+    Promise.allSettled([checkBackendHealth(), listUsers()]).then((results) => {
+      if (cancelled) return;
+      const healthResult = results[0];
+      const usersResult = results[1];
+      if (healthResult.status === "fulfilled") {
+        setConnection(healthResult.value.model_configured ? "live" : "needs-key");
+      } else {
+        setConnection("idle");
+      }
+      const registered = usersResult.status === "fulfilled" ? usersResult.value : [];
+      setUsers(registered);
+      if (usersResult.status === "rejected") {
+        setToast({ text: "用户列表加载失败，已保留本地兼容用户", error: true });
+      }
+      let remembered = "";
+      try {
+        remembered = window.localStorage.getItem(ACTIVE_USER_PREFERENCE_KEY) || "";
+      } catch {
+        // Browser preferences are optional.
+      }
+      const selected = registered.some((user) => user.user_id === remembered)
+        ? remembered
+        : registered[0]?.user_id || "user_001";
+      resetWorkspace(registered.find((user) => user.user_id === selected));
+      setActiveUserId(selected);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [resetWorkspace]);
+
+  useEffect(() => {
+    if (!activeUserId) return;
+    let cancelled = false;
+    const cached = readLocalWorkspaceCache(activeUserId);
+    try {
+      window.localStorage.setItem(ACTIVE_USER_PREFERENCE_KEY, activeUserId);
+    } catch {
+      // Browser preferences are optional.
+    }
+    loadBackendWorkspaceState(activeUserId)
+      .then((backendState) => {
         if (cancelled) return;
-        setConnection(health.model_configured ? "live" : "needs-key");
         const merged = mergeBackendProfile(
           backendState,
           cached?.profile || DEFAULT_PROFILE,
@@ -729,10 +1038,107 @@ export default function LearningWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [applyFrontendState]);
+  }, [activeUserId, applyFrontendState]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!activeUserId) return;
+    let cancelled = false;
+    loadCapabilityScores(activeUserId)
+      .then((result) => {
+        if (!cancelled) setBackendCapabilityScores(result);
+      })
+      .catch(() => {
+        // Compatibility fallback: local evidence remains available when an
+        // older backend does not expose the v2 learner_metrics endpoints.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeUserId]);
+
+  useEffect(() => {
+    if (!hydrated || !activeUserId) return;
+    const quizEvidence = capabilityEvidence.filter(
+      (item) => item.sourceType === "quiz",
+    );
+    if (!quizEvidence.length) return;
+    const syncKey = capabilityEvidenceSyncKey(activeUserId, quizEvidence);
+    if (profileEvidenceSyncKey.current === syncKey) return;
+    profileEvidenceSyncKey.current = syncKey;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void syncQuizProfileEvidence(
+        activeUserId,
+        ACTIVE_COURSE_ID,
+        quizEvidence,
+      )
+        .then(async () => {
+          const [capability, gaps] = await Promise.all([
+            loadCapabilityScores(activeUserId),
+            loadBackendKnowledgeGaps(activeUserId),
+          ]);
+          if (!cancelled) {
+            setBackendCapabilityScores(capability);
+            setBackendKnowledgeGapState(gaps);
+          }
+        })
+        .catch(() => {
+          // Keep the local evidence and retry after the next evidence change.
+          if (!cancelled) profileEvidenceSyncKey.current = "";
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeUserId, capabilityEvidence, hydrated]);
+
+  useEffect(() => {
+    if (!activeUserId) return;
+    let cancelled = false;
+    loadBackendKnowledgeGaps(activeUserId)
+      .then((result) => {
+        if (!cancelled) setBackendKnowledgeGapState(result);
+      })
+      .catch(() => {
+        // Compatibility fallback: older backends still expose knowledge_gaps
+        // through the aggregate workspace state loaded above.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeUserId]);
+
+  useEffect(() => {
+    if (!activeUserId) return;
+    let cancelled = false;
+    const loadingTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      setLearningPathLoading(true);
+      setLearningPathError("");
+    }, 0);
+    loadUserLearningPath(activeUserId, ACTIVE_COURSE_ID)
+      .then((result) => {
+        if (!cancelled) setUserLearningPath(result);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setUserLearningPath(null);
+        setLearningPathError(
+          error instanceof Error ? error.message : "无法读取后端学习路径",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLearningPathLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(loadingTimer);
+    };
+  }, [activeUserId]);
+
+  useEffect(() => {
+    if (!hydrated || !activeUserId) return;
     const frontendState: FrontendStateSnapshot = {
       state_version: 1,
       qa_context_version: QA_CONTEXT_VERSION,
@@ -755,7 +1161,7 @@ export default function LearningWorkspace() {
 
     try {
       window.localStorage.setItem(
-        "knowledge-chain-memory-v1",
+        workspaceCacheKey(activeUserId),
         JSON.stringify({ profile, scores, frontendState }),
       );
     } catch {
@@ -768,7 +1174,7 @@ export default function LearningWorkspace() {
     );
     persistenceRevision.current = clientRevision;
     const timer = window.setTimeout(() => {
-      void saveBackendWorkspaceState(ACTIVE_USER_ID, {
+      void saveBackendWorkspaceState(activeUserId, {
         profile,
         scores,
         frontend_state: frontendState,
@@ -780,6 +1186,7 @@ export default function LearningWorkspace() {
     return () => window.clearTimeout(timer);
   }, [
     history,
+    activeUserId,
     hydrated,
     capabilityEvidence,
     memoryEvents,
@@ -803,27 +1210,71 @@ export default function LearningWorkspace() {
   }, [toast]);
 
   function addSuggestions(response: AgentResponse) {
-    const suggestions: PendingSuggestion[] = [];
-    for (const patch of response.profile_update_suggestions?.md_patches || []) {
-      suggestions.push({ id: uid("profile"), kind: "profile", patch });
-    }
-    // Agent score patches are deliberately ignored. Ability scores are
-    // derived only from graded question/practice evidence.
-    if (suggestions.length) {
-      setPendingSuggestions((current) => [...suggestions, ...current].slice(0, 8));
-    }
+    const patches = response.profile_update_suggestions?.md_patches || [];
+    // 能力分数不接受主观建议；这里只自动应用学习者画像字段。
+    // Ability scores remain derived only from graded question/practice evidence.
+    if (!patches.length) return;
+    setProfile((current) => {
+      const next = { ...current };
+      for (const patch of patches) {
+        const field = patch.path.replace(/^\/+/, "").split("/").pop() || patch.path;
+        if (field === "level") {
+          const value = String(patch.value ?? "");
+          if (!["beginner", "intermediate", "advanced"].includes(value)) continue;
+        }
+        next[field] = patch.op === "remove" ? "" : String(patch.value ?? "");
+      }
+      return next;
+    });
+    setPendingSuggestions([]);
+    setMemoryEvents((current) => [
+      {
+        id: uid("profile-auto-update"),
+        title: "知链已更新学习者画像",
+        detail: `根据本次学习行为自动更新 ${patches.length} 项画像信息。`,
+        time: new Date().toLocaleString("zh-CN", {
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
+      ...current,
+    ]);
   }
 
   async function runAgent(request: AgentRequest): Promise<AgentResponse> {
     setBusy(true);
     setTrace(PENDING_TRACE);
+    setGraphEvents([]);
+    setActiveRunId("");
+    setGraphRunStatus("created");
     setConnection("checking");
     try {
-      const response = await dispatchToCentralOrchestrator({
-        ...request,
-        learning_progress: learningProgress.agentContext,
-      });
+      const response = await dispatchToCentralOrchestrator(
+        {
+          ...request,
+          learning_progress: learningProgress.agentContext,
+        },
+        {
+          onTrace: setTrace,
+          onRunCreated: setActiveRunId,
+          onStatus: setGraphRunStatus,
+          onEvent: (event) => {
+            setGraphEvents((current) => {
+              if (
+                event.event_id &&
+                current.some((item) => item.event_id === event.event_id)
+              ) {
+                return current;
+              }
+              return [...current, event];
+            });
+          },
+        },
+      );
       setConnection("live");
+      setGraphRunStatus("completed");
       setTrace(response.agent_trace || []);
       setLastResponse(response);
       addSuggestions(response);
@@ -832,6 +1283,9 @@ export default function LearningWorkspace() {
       const message =
         error instanceof Error ? error.message : "无法连接中央调度器";
       setConnection(message.includes("DEEPSEEK_API_KEY") ? "needs-key" : "idle");
+      setGraphRunStatus((current) =>
+        current === "cancelled" ? current : "failed",
+      );
       setTrace([]);
       setLastResponse(null);
       setToast({
@@ -845,13 +1299,20 @@ export default function LearningWorkspace() {
   }
 
   async function refreshMemory(showToast = true) {
+    if (!activeUserId) return;
     setMemoryBusy(true);
     try {
-      const backendState = await loadBackendWorkspaceState(ACTIVE_USER_ID);
+      const [backendState, capabilityState, knowledgeGapState] = await Promise.all([
+        loadBackendWorkspaceState(activeUserId),
+        loadCapabilityScores(activeUserId),
+        loadBackendKnowledgeGaps(activeUserId).catch(() => null),
+      ]);
       const merged = mergeBackendProfile(backendState, profile, scores);
       setProfile(merged.profile);
       setBackendKnowledgeGaps(backendState.knowledge_gaps ?? []);
       setBackendCourseProgress(backendState.learning_progress ?? []);
+      setBackendCapabilityScores(capabilityState);
+      if (knowledgeGapState) setBackendKnowledgeGapState(knowledgeGapState);
       persistenceRevision.current = Math.max(
         persistenceRevision.current,
         Number(backendState.client_revision || 0),
@@ -874,15 +1335,17 @@ export default function LearningWorkspace() {
     }
   }
 
-  async function saveMemory() {
+  async function saveMemory(profileOverride?: LearnerProfile) {
+    if (!activeUserId) return;
     setMemoryBusy(true);
     try {
+      const profileToSave = profileOverride ?? profile;
       const backendProfile = await saveBackendProfile(
-        ACTIVE_USER_ID,
-        profile,
+        activeUserId,
+        profileToSave,
         scores,
       );
-      const merged = mergeBackendProfile(backendProfile, profile, scores);
+      const merged = mergeBackendProfile(backendProfile, profileToSave, scores);
       setProfile(merged.profile);
       setMemoryEvents((events) => [
         {
@@ -909,6 +1372,58 @@ export default function LearningWorkspace() {
     }
   }
 
+  async function switchActiveUser(nextUser: UserSummary) {
+    if (!nextUser.user_id || nextUser.user_id === activeUserId) {
+      setUserDialog(null);
+      return;
+    }
+    const frontendState: FrontendStateSnapshot = {
+      state_version: 1,
+      qa_context_version: QA_CONTEXT_VERSION,
+      messages: messages.slice(-500),
+      history: history.slice(0, 100),
+      memory_events: memoryEvents.slice(0, 500),
+      pending_suggestions: pendingSuggestions.slice(0, 100),
+      user_identity: userIdentity,
+      qa_session_id: qaSessionId,
+      capability_assessment: {
+        model_version: ASSESSMENT_MODEL_VERSION,
+        evidence: capabilityEvidence.slice(0, 2_000),
+      },
+      quiz_sessions: quizSessions.slice(0, 50),
+      active_quiz_session_id: activeQuizSessionId,
+      learning_progress: learningProgress,
+      lecture_sessions: lectureSessions.slice(0, 50),
+      active_lecture_session_id: activeLectureSessionId,
+    };
+    setMemoryBusy(true);
+    try {
+      if (activeUserId) {
+        const revision = Math.max(Date.now(), persistenceRevision.current + 1);
+        await saveBackendWorkspaceState(activeUserId, {
+          profile,
+          scores,
+          frontend_state: frontendState,
+          client_revision: revision,
+        });
+      }
+      // Preflight the target workspace. A failed switch must leave the current UI intact.
+      await loadBackendWorkspaceState(nextUser.user_id);
+      setHydrated(false);
+      resetWorkspace(nextUser);
+      setActiveUserId(nextUser.user_id);
+      setUserDialog(null);
+      setToast({ text: `已切换到“${nextUser.display_name || nextUser.user_id}”` });
+    } catch (error) {
+      setToast({
+        text: error instanceof Error ? `切换失败：${error.message}` : "用户切换失败",
+        error: true,
+      });
+    } finally {
+      setMemoryBusy(false);
+    }
+  }
+
   const pageMeta = {
     chat: {
       title: "聊天问答",
@@ -923,8 +1438,8 @@ export default function LearningWorkspace() {
       detail: "根据当前画像、学习进度与知识库生成个性化阶段讲义",
     },
     memory: {
-      title: "Memory",
-      detail: "维护学习者画像、能力分数和 Agent 更新建议",
+      title: "用户中心",
+      detail: "查看学习画像、知识漏洞、资源匹配与个性化设置",
     },
     progress: {
       title: "学习进度",
@@ -933,36 +1448,67 @@ export default function LearningWorkspace() {
   }[activeView];
 
   return (
-    <div className="app-shell">
-      <Sidebar
-        activeView={activeView}
-        setActiveView={setActiveView}
-        history={history}
-        connection={connection}
-        userIdentity={userIdentity}
-        setUserIdentity={setUserIdentity}
-      />
+    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+      {!sidebarCollapsed && (
+        <Sidebar
+          activeView={activeView}
+          setActiveView={setActiveView}
+          connection={connection}
+          userIdentity={userIdentity}
+          setUserIdentity={setUserIdentity}
+          busy={busy}
+          trace={trace}
+          graphEvents={graphEvents}
+          runId={activeRunId}
+          runStatus={graphRunStatus}
+          response={lastResponse}
+          activeUserId={activeUserId}
+          onSwitchUser={() => setUserDialog("switch")}
+          onCreateUser={() => setUserDialog("create")}
+          onCollapse={() => setSidebarCollapsed(true)}
+        />
+      )}
       <main className="workspace">
         <header className="topbar">
-          <div className="page-heading">
-            <h1>{pageMeta.title}</h1>
-            <p>{pageMeta.detail}</p>
+          <div className="topbar-start">
+            {sidebarCollapsed && (
+              <SidebarToggleButton
+                collapsed
+                onToggle={() => setSidebarCollapsed(false)}
+              />
+            )}
+            <div className="page-heading">
+              <h1>{pageMeta.title}</h1>
+              <p>{pageMeta.detail}</p>
+            </div>
           </div>
-          <span className="orchestrator-badge">中央调度器 · HTTP v1</span>
+          <div className="topbar-actions">
+            <span className="orchestrator-badge">中央调度器 · HTTP v2</span>
+            <button
+              type="button"
+              className="more-info-button"
+              aria-controls="more-info-drawer"
+              aria-expanded={moreInfoOpen}
+              onClick={() => setMoreInfoOpen(true)}
+            >
+              更多信息
+              <span aria-hidden="true">···</span>
+            </button>
+          </div>
         </header>
         <div className="page-content">
           {activeView === "chat" && (
             <ChatView
+              userId={activeUserId}
               messages={messages}
               setMessages={setMessages}
+              history={history}
               setHistory={setHistory}
               busy={busy}
               profile={profile}
               scores={scores}
               memoryEvents={memoryEvents}
               runAgent={runAgent}
-              trace={trace}
-              response={lastResponse}
               userIdentity={userIdentity}
               qaSessionId={qaSessionId}
               setQaSessionId={setQaSessionId}
@@ -971,6 +1517,7 @@ export default function LearningWorkspace() {
           )}
           {activeView === "quiz" && (
             <QuizView
+              userId={activeUserId}
               busy={busy}
               profile={profile}
               scores={scores}
@@ -979,8 +1526,16 @@ export default function LearningWorkspace() {
               sessions={quizSessions}
               activeLecture={
                 lectureSessions.find(
-                  (lecture) => lecture.id === activeLectureSessionId,
+                  (lecture) =>
+                    lecture.id === activeLectureSessionId &&
+                    (!userLearningPath ||
+                      userLearningPath.chapters.some(
+                        (chapter) => chapter.chapter_id === lecture.chapterId,
+                      )),
                 ) ?? null
+              }
+              currentChapterId={
+                userLearningPath?.current_chapter_id || ACTIVE_CHAPTER_ID
               }
               activeSessionId={activeQuizSessionId}
               onActiveSessionChange={setActiveQuizSessionId}
@@ -1005,10 +1560,6 @@ export default function LearningWorkspace() {
                   evidence,
                 );
                 const nextAssessment = calculateCapabilityAssessment(nextEvidence);
-                const nextScores = assessmentToScoreMap(
-                  nextAssessment,
-                  profile.level,
-                );
                 setCapabilityEvidence(nextEvidence);
                 const progress = quizSessionProgress(session);
                 const changedDimensions = [
@@ -1034,50 +1585,31 @@ export default function LearningWorkspace() {
                   },
                   ...events,
                 ]);
-                const feedbackRequest = buildAgentRequest({
-                  userId: ACTIVE_USER_ID,
-                  courseId: ACTIVE_COURSE_ID,
-                  chapterId: ACTIVE_CHAPTER_ID,
-                  prompt: `Quiz 作答结果：${JSON.stringify({
-                    quiz_session_id: session.id,
-                    topic: session.topic,
-                    difficulty: session.difficulty,
-                     correct: progress.correct,
-                      total: progress.total,
-                      earned_points: progress.earnedPoints,
-                      possible_points: progress.possiblePoints,
-                      accuracy: progress.accuracy,
-                    evidence: evidence.map((item) => ({
-                      dimension: item.dimension,
-                      knowledge_point: item.knowledgePoint,
-                       correct: item.correct,
-                        earned: item.earned,
-                        possible: item.possible,
-                        question_type: item.questionType,
-                        grading_method: item.gradingMethod,
-                        semantic_score: item.semanticScore,
-                        key_point_score: item.keyPointScore,
-                      source_refs: item.sourceRefs,
-                      rag_chunk_ids: item.ragChunkIds,
-                    })),
-                    retrieval: session.retrieval,
-                  })}`,
-                  contentType: "feedback",
-                  scores: nextScores,
-                  profile,
-                });
                 try {
-                  await runAgent(feedbackRequest);
+                  profileEvidenceSyncKey.current = capabilityEvidenceSyncKey(
+                    activeUserId,
+                    nextEvidence,
+                  );
+                  await submitPersistedQuizAttempts(activeUserId, session);
+                  await syncQuizProfileEvidence(
+                    activeUserId,
+                    ACTIVE_COURSE_ID,
+                    nextEvidence,
+                  );
                   await refreshMemory(false);
-                  setToast({ text: "Quiz 结果已写入后端 Memory" });
-                } catch {
-                  // runAgent already exposes the actionable backend error.
+                  setToast({ text: "Quiz 作答、能力证据和知识漏洞已写入后端" });
+                } catch (error) {
+                  setToast({
+                    text: error instanceof Error ? error.message : "Quiz 结果写入失败",
+                    error: true,
+                  });
                 }
               }}
             />
           )}
           {activeView === "lecture" && (
             <LectureView
+              userId={activeUserId}
               sessions={lectureSessions}
               activeSessionId={activeLectureSessionId}
               onActiveSessionChange={setActiveLectureSessionId}
@@ -1102,22 +1634,27 @@ export default function LearningWorkspace() {
               profile={profile}
               scores={scores}
               progress={learningProgress}
-              capabilityEvidence={capabilityEvidence}
+              learningPath={userLearningPath}
+              capabilityEvidence={effectiveCapabilityEvidence}
               busy={busy}
               runAgent={runAgent}
               onProgressChanged={() => refreshMemory(false)}
             />
           )}
           {activeView === "memory" && (
-            <MemoryView
+            <UserCenterView
+              userId={activeUserId}
               profile={profile}
               assessment={capabilityAssessment}
+              capabilityOverall={
+                activeBackendCapabilityScores?.profileScore.overall ??
+                learningProgress.provisionalMastery
+              }
               progress={learningProgress}
               setProfile={setProfile}
+              knowledgeGaps={effectiveKnowledgeGaps}
+              knowledgeGapSummary={activeKnowledgeGapState?.summary ?? null}
               events={memoryEvents}
-              setEvents={setMemoryEvents}
-              suggestions={pendingSuggestions}
-              setSuggestions={setPendingSuggestions}
               busy={memoryBusy}
               onReload={() => refreshMemory()}
               onSaved={saveMemory}
@@ -1126,14 +1663,44 @@ export default function LearningWorkspace() {
           {activeView === "progress" && (
             <LearningProgressView
               progress={learningProgress}
-              profile={profile}
-              scores={scores}
-              busy={busy}
-              runAgent={runAgent}
+              learningPath={userLearningPath}
+              learningPathLoading={learningPathLoading}
+              learningPathError={learningPathError}
+              onNavigate={setActiveView}
             />
           )}
         </div>
       </main>
+      <MoreInfoDrawer
+        userId={activeUserId}
+        open={moreInfoOpen}
+        onClose={() => setMoreInfoOpen(false)}
+        progress={learningProgress}
+        profile={profile}
+        scores={scores}
+        busy={busy}
+        runAgent={runAgent}
+      />
+      <UserAccessDialog
+        key={userDialog || "user-dialog-closed"}
+        mode={userDialog}
+        users={users}
+        activeUserId={activeUserId}
+        onClose={() => setUserDialog(null)}
+        onModeChange={setUserDialog}
+        onSelect={(user) => void switchActiveUser(user)}
+        onCreated={(user) => {
+          setUsers((current) => [
+            user,
+            ...current.filter((item) => item.user_id !== user.user_id),
+          ]);
+          setHydrated(false);
+          resetWorkspace(user);
+          setActiveUserId(user.user_id);
+          setUserDialog(null);
+          setToast({ text: `已创建学习者“${user.display_name || user.user_id}”` });
+        }}
+      />
       {toast && <div className={`toast ${toast.error ? "error" : ""}`}>{toast.text}</div>}
     </div>
   );
@@ -1142,29 +1709,52 @@ export default function LearningWorkspace() {
 function Sidebar({
   activeView,
   setActiveView,
-  history,
   connection,
   userIdentity,
   setUserIdentity,
+  busy,
+  trace,
+  graphEvents,
+  runId,
+  runStatus,
+  response,
+  activeUserId,
+  onSwitchUser,
+  onCreateUser,
+  onCollapse,
 }: {
   activeView: View;
   setActiveView: (view: View) => void;
-  history: string[];
   connection: ConnectionState;
   userIdentity: UserIdentity;
   setUserIdentity: React.Dispatch<React.SetStateAction<UserIdentity>>;
+  busy: boolean;
+  trace: AgentTrace[];
+  graphEvents: GraphRunEvent[];
+  runId: string;
+  runStatus: GraphRunStatus;
+  response: AgentResponse | null;
+  activeUserId: string;
+  onSwitchUser: () => void;
+  onCreateUser: () => void;
+  onCollapse: () => void;
 }) {
   const items: Array<{ id: View; symbol: string; label: string }> = [
+    { id: "progress", symbol: "进", label: "学习进度" },
     { id: "chat", symbol: "问", label: "聊天问答" },
     { id: "quiz", symbol: "测", label: "Quiz 生成" },
     { id: "lecture", symbol: "学", label: "学习讲义" },
-    { id: "memory", symbol: "记", label: "Memory" },
-    { id: "progress", symbol: "进", label: "学习进度" },
+    { id: "memory", symbol: "人", label: "用户中心" },
   ];
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" id="zlink-sidebar">
       <div className="brand">
+        <SidebarToggleButton
+          collapsed={false}
+          className="sidebar-toggle-in-sidebar"
+          onToggle={onCollapse}
+        />
         <span className="brand-logo-shell" aria-hidden="true">
           <img
             className="brand-logo"
@@ -1186,6 +1776,7 @@ function Sidebar({
             key={item.id}
             className={`nav-button ${activeView === item.id ? "active" : ""}`}
             aria-current={activeView === item.id ? "page" : undefined}
+            aria-label={item.id === "memory" ? "Memory 用户中心" : item.label}
             onClick={() => setActiveView(item.id)}
           >
             <span className="nav-symbol">{item.symbol}</span>
@@ -1193,70 +1784,93 @@ function Sidebar({
           </button>
         ))}
       </nav>
-      <section className="sidebar-section">
-        <p className="sidebar-label">最近问答</p>
-        <div className="history-list">
-          {history.length ? (
-            history.slice(0, 7).map((item, index) => (
-              <button
-                type="button"
-                className="history-item"
-                key={`${item}-${index}`}
-                title={item}
-                onClick={() => setActiveView("chat")}
-              >
-                {item}
-              </button>
-            ))
-          ) : (
-            <div className="history-item">发送问题后显示记录</div>
-          )}
-        </div>
-      </section>
+      <AgentActivity
+        busy={busy}
+        trace={trace}
+        graphEvents={graphEvents}
+        runId={runId}
+        runStatus={runStatus}
+        response={response}
+        compact
+      />
       <footer className="sidebar-footer">
         <div className="connection-card">
           <span className={`status-dot ${connection}`} />
           <span>{connectionText(connection)}</span>
         </div>
-        <UserProfileControl identity={userIdentity} onChange={setUserIdentity} />
+        <UserProfileControl
+          identity={userIdentity}
+          onChange={setUserIdentity}
+          userId={activeUserId}
+          onSwitchUser={onSwitchUser}
+          onCreateUser={onCreateUser}
+        />
       </footer>
     </aside>
   );
 }
 
 function ChatView({
+  userId,
   messages,
   setMessages,
+  history,
   setHistory,
   busy,
   profile,
   scores,
   memoryEvents,
   runAgent,
-  trace,
-  response,
   userIdentity,
   qaSessionId,
   setQaSessionId,
   recommendations,
 }: {
+  userId: string;
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  history: string[];
   setHistory: React.Dispatch<React.SetStateAction<string[]>>;
   busy: boolean;
   profile: LearnerProfile;
   scores: ScoreMap;
   memoryEvents: MemoryEvent[];
   runAgent: (request: AgentRequest) => Promise<AgentResponse>;
-  trace: AgentTrace[];
-  response: AgentResponse | null;
   userIdentity: UserIdentity;
   qaSessionId: string;
   setQaSessionId: React.Dispatch<React.SetStateAction<string>>;
   recommendations: LearningRecommendations;
 }) {
   const [input, setInput] = useState("");
+  const [historyPanelCollapsed, setHistoryPanelCollapsed] = useState(false);
+  const [historyPanelPeek, setHistoryPanelPeek] = useState(false);
+  const [historyPreferenceReady, setHistoryPreferenceReady] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      // Restore the persisted panel state after the browser storage is available.
+      setHistoryPanelCollapsed(
+        window.localStorage.getItem(CHAT_HISTORY_PANEL_PREFERENCE_KEY) === "true",
+      );
+    } catch {
+      // Keep the question history visible when local preferences are unavailable.
+    } finally {
+      setHistoryPreferenceReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!historyPreferenceReady) return;
+    try {
+      window.localStorage.setItem(
+        CHAT_HISTORY_PANEL_PREFERENCE_KEY,
+        String(historyPanelCollapsed),
+      );
+    } catch {
+      // This preference is optional and must not block chat.
+    }
+  }, [historyPanelCollapsed, historyPreferenceReady]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -1276,7 +1890,7 @@ function ChatView({
     setHistory((items) => [clean, ...items.filter((item) => item !== clean)]);
 
     const request = buildAgentRequest({
-      userId: ACTIVE_USER_ID,
+      userId,
       courseId: ACTIVE_COURSE_ID,
       chapterId: ACTIVE_CHAPTER_ID,
       prompt: clean,
@@ -1331,8 +1945,14 @@ function ChatView({
 
   const showWelcome = messages.length === 1;
 
+  const showHistory = history.length > 0 || !showWelcome;
+  const historyPanelVisible =
+    showHistory && (!historyPanelCollapsed || historyPanelPeek);
+
   return (
-    <div className={`chat-layout ${showWelcome ? "welcome-layout" : ""}`}>
+    <div
+      className={`chat-layout ${showWelcome && !showHistory ? "welcome-layout" : ""} ${historyPanelCollapsed ? "history-panel-collapsed" : ""}`}
+    >
       <section className={`chat-panel ${showWelcome ? "welcome-state" : ""}`}>
         <div className="message-scroll" ref={scrollRef}>
           <div className="messages">
@@ -1469,36 +2089,331 @@ function ChatView({
           </form>
         </div>
       </section>
-      {!showWelcome && (
-        <AgentActivity busy={busy} trace={trace} response={response} />
+      {historyPanelVisible && (
+        <RecentHistoryPanel
+          history={history}
+          overlay={historyPanelCollapsed}
+          onClose={() => {
+            setHistoryPanelCollapsed(true);
+            setHistoryPanelPeek(false);
+          }}
+          onLeave={() => {
+            if (historyPanelCollapsed) setHistoryPanelPeek(false);
+          }}
+          onSelect={(question) => {
+            setInput(question);
+            setHistoryPanelPeek(false);
+          }}
+        />
+      )}
+      {showHistory && historyPanelCollapsed && !historyPanelPeek && (
+        <button
+          type="button"
+          className="history-edge-trigger"
+          aria-label="显示最近问答"
+          title="显示最近问答"
+          onMouseEnter={() => setHistoryPanelPeek(true)}
+          onFocus={() => setHistoryPanelPeek(true)}
+          onClick={() => setHistoryPanelCollapsed(false)}
+        >
+          <span aria-hidden="true" />
+        </button>
       )}
     </div>
   );
 }
 
+function RecentHistoryPanel({
+  history,
+  overlay,
+  onClose,
+  onLeave,
+  onSelect,
+}: {
+  history: string[];
+  overlay: boolean;
+  onClose: () => void;
+  onLeave: () => void;
+  onSelect: (question: string) => void;
+}) {
+  return (
+    <aside
+      className={`recent-history-panel ${overlay ? "overlay" : ""}`}
+      id="recent-question-history"
+      onMouseLeave={onLeave}
+    >
+      <div className="recent-history-header">
+        <div>
+          <h3>最近问答</h3>
+          <p>{history.length ? `${history.length} 条本地记录` : "暂无问答记录"}</p>
+        </div>
+        <button
+          type="button"
+          className="panel-collapse-button"
+          aria-label="隐藏最近问答"
+          title="隐藏最近问答"
+          onClick={onClose}
+        >
+          <span className="panel-collapse-icon" aria-hidden="true" />
+        </button>
+      </div>
+      <div className="recent-history-list">
+        {history.length ? (
+          history.slice(0, 20).map((item, index) => (
+            <button
+              type="button"
+              className="recent-history-item"
+              key={`${item}-${index}`}
+              title={item}
+              onClick={() => onSelect(item)}
+            >
+              <span>{item}</span>
+              <small>填入输入框</small>
+            </button>
+          ))
+        ) : (
+          <div className="recent-history-empty">
+            发送问题后，记录会自动保存在这里。
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function graphEventAgentName(agentId?: string, displayName?: string): string {
+  if (displayName) return displayName;
+  if (!agentId) return "中央调度器";
+  return AGENT_LABELS[agentId] || agentId.replaceAll("_", " ");
+}
+
+function graphPayloadValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    if (!value.length) return "0 项";
+    const first = value[0];
+    return typeof first === "string"
+      ? `${value.length} 项 · ${first}`
+      : `${value.length} 项`;
+  }
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value as Record<string, unknown>);
+    return keys.length ? `${keys.length} 个字段` : "已生成";
+  }
+  if (typeof value === "boolean") return value ? "是" : "否";
+  const text = String(value ?? "").trim();
+  return text.length > 44 ? `${text.slice(0, 41)}...` : text;
+}
+
+function graphPayloadSummary(payloadRefs?: GraphPayloadRefs) {
+  if (!payloadRefs) return [];
+  const entries = Object.entries(payloadRefs).filter(
+    ([, value]) => value !== null && value !== undefined && value !== "",
+  );
+  entries.sort(([left], [right]) => {
+    const priority = Object.keys(PAYLOAD_REF_LABELS);
+    const leftIndex = priority.indexOf(left);
+    const rightIndex = priority.indexOf(right);
+    return (leftIndex < 0 ? 99 : leftIndex) - (rightIndex < 0 ? 99 : rightIndex);
+  });
+  return entries.slice(0, 5).map(([key, value]) => ({
+    key,
+    label: PAYLOAD_REF_LABELS[key] || key.replaceAll("_", " "),
+    value: graphPayloadValue(value),
+  }));
+}
+
 function AgentActivity({
   busy,
   trace,
+  graphEvents,
+  runId,
+  runStatus,
   response,
+  compact = false,
 }: {
   busy: boolean;
   trace: AgentTrace[];
+  graphEvents: GraphRunEvent[];
+  runId: string;
+  runStatus: GraphRunStatus;
   response: AgentResponse | null;
+  compact?: boolean;
 }) {
-  const displayed = busy ? PENDING_TRACE : trace;
+  const activities = graphEvents.filter(
+    (event): event is AgentActivityEvent => event.event_type === "agent.activity",
+  );
+  const handoffs = graphEvents.filter(
+    (event): event is AgentMessageEvent => event.event_type === "agent.message",
+  );
+  const latestActivity = activities.at(-1);
+  const agents = Array.from(
+    new Map(
+      activities.map((event) => [
+        event.agent_id || event.agent_display_name || "agent",
+        graphEventAgentName(event.agent_id, event.agent_display_name),
+      ]),
+    ).values(),
+  );
+  const displayed = graphEvents.length ? [] : busy ? PENDING_TRACE : trace;
   const ragEvidence = response?.rag_package?.evidence ?? [];
+  const effectiveStatus = busy && runStatus === "created" ? "running" : runStatus;
 
   return (
-    <aside className="activity-panel">
+    <section className={`activity-panel ${compact ? "sidebar-agent-activity" : ""}`}>
       <div className="activity-header">
         <div>
-          <h3>Agent 活动</h3>
-          <p>{busy ? "任务执行中" : trace.length ? "最近一次执行轨迹" : "等待任务"}</p>
+          <h3>多 Agent 协作</h3>
+          <p>
+            {graphEvents.length || runId
+              ? RUN_STATUS_LABELS[effectiveStatus]
+              : "等待任务"}
+          </p>
         </div>
-        {!!response && <span className="mini-chip">v1</span>}
+        <span className={`run-status-pill ${effectiveStatus}`}>
+          {effectiveStatus === "running" && <span aria-hidden="true" />}
+          {RUN_STATUS_LABELS[effectiveStatus]}
+        </span>
       </div>
+
+      {(runId || graphEvents.length > 0) && (
+        <div className="agent-run-overview">
+          <div className="agent-section-heading">
+            <h4>当前运行状态</h4>
+            <span title={runId}>{runId ? runId.replace(/^run_/, "#") : "创建中"}</span>
+          </div>
+          <div className="run-overview-grid">
+            <div>
+              <small>当前 Agent</small>
+              <strong>
+                {latestActivity
+                  ? graphEventAgentName(
+                      latestActivity.agent_id,
+                      latestActivity.agent_display_name,
+                    )
+                  : effectiveStatus === "completed"
+                    ? "中央调度器"
+                    : "正在分配"}
+              </strong>
+            </div>
+            <div>
+              <small>当前节点</small>
+              <strong title={latestActivity?.node_id || ""}>
+                {latestActivity?.node_id
+                  ? TRACE_LABELS[latestActivity.node_id] || latestActivity.node_id
+                  : "—"}
+              </strong>
+            </div>
+            <div>
+              <small>参与 Agent</small>
+              <strong>{agents.length}</strong>
+            </div>
+            <div>
+              <small>实时事件</small>
+              <strong>{graphEvents.length}</strong>
+            </div>
+          </div>
+          {!!agents.length && (
+            <div className="agent-participant-list" aria-label="参与协作的 Agent">
+              {agents.map((agent) => (
+                <span key={agent}>{agent}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!!graphEvents.length && (
+        <div className="agent-event-section handoff-section">
+          <div className="agent-section-heading">
+            <h4>Agent 协作流</h4>
+            <span>{handoffs.length} 次交接</span>
+          </div>
+          {handoffs.length ? (
+            <div className="handoff-list">
+              {handoffs.map((event, index) => {
+                const payload = graphPayloadSummary(event.payload_refs);
+                return (
+                  <article
+                    className="handoff-item"
+                    key={event.event_id || `${event.from_agent}-${event.to_agent}-${index}`}
+                  >
+                    <div className="handoff-route">
+                      <span>{graphEventAgentName(event.from_agent)}</span>
+                      <b aria-label="交接给">→</b>
+                      <span>{graphEventAgentName(event.to_agent)}</span>
+                    </div>
+                    <div className="handoff-message">
+                      <strong>{event.display_text || "交接任务"}</strong>
+                      <small>{event.message_type || "handoff"}</small>
+                    </div>
+                    {!!event.detail && <p>{event.detail}</p>}
+                    {!!payload.length && (
+                      <div className="event-payload-list">
+                        {payload.map((item) => (
+                          <span key={`${event.event_id}-${item.key}`}>
+                            <b>{item.label}</b>{item.value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="agent-event-empty">任务仍在首个 Agent 内处理中，暂未发生交接。</p>
+          )}
+        </div>
+      )}
+
+      {!!activities.length && (
+        <div className="agent-event-section activity-timeline-section">
+          <div className="agent-section-heading">
+            <h4>节点执行时间线</h4>
+            <span>{activities.length} 个节点</span>
+          </div>
+          <div className="trace-list live-agent-trace">
+            {activities.map((event, index) => {
+              const isCurrent = busy && index === activities.length - 1;
+              const payload = graphPayloadSummary(event.payload_refs);
+              return (
+                <div
+                  className={`trace-item ${isCurrent ? "running" : "done"}`}
+                  key={event.event_id || `${event.node_id}-${index}`}
+                >
+                  <span className="trace-node">
+                    {isCurrent ? "•" : "✓"}
+                  </span>
+                  <div className="trace-copy">
+                    <small className="trace-agent-name">
+                      {graphEventAgentName(event.agent_id, event.agent_display_name)}
+                    </small>
+                    <strong title={event.node_id || ""}>
+                      {(event.node_id && TRACE_LABELS[event.node_id]) ||
+                        event.display_text ||
+                        event.node_id ||
+                        "Agent 节点"}
+                    </strong>
+                    <p>{event.detail || event.display_text || "已完成当前步骤"}</p>
+                    {!!payload.length && (
+                      <div className="event-payload-list">
+                        {payload.map((item) => (
+                          <span key={`${event.event_id}-${item.key}`}>
+                            <b>{item.label}</b>{item.value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {displayed.length ? (
-        <div className="trace-list">
+        <div className="trace-list legacy-agent-trace">
           {displayed.map((item, index) => {
             const state =
               item.status === "running"
@@ -1520,9 +2435,11 @@ function AgentActivity({
           })}
         </div>
       ) : (
-        <div className="empty-activity">
-          发送问题后，这里会展示中央调度器返回的 agent_trace。
-        </div>
+        !graphEvents.length && (
+          <div className="empty-activity">
+            发起问答、Quiz 或讲义任务后，这里会实时展示 Agent 节点、协作交接与传递摘要。
+          </div>
+        )
       )}
       {!!response && (
         <div className="report-card">
@@ -1571,11 +2488,12 @@ function AgentActivity({
           </div>
         </div>
       )}
-    </aside>
+    </section>
   );
 }
 
 function QuizView({
+  userId,
   busy,
   profile,
   scores,
@@ -1583,12 +2501,14 @@ function QuizView({
   runAgent,
   sessions,
   activeLecture,
+  currentChapterId,
   activeSessionId,
   onActiveSessionChange,
   onSessionChange,
   onQuestionSubmitted,
   onFinished,
 }: {
+  userId: string;
   busy: boolean;
   profile: LearnerProfile;
   scores: ScoreMap;
@@ -1596,6 +2516,7 @@ function QuizView({
   runAgent: (request: AgentRequest) => Promise<AgentResponse>;
   sessions: QuizSession[];
   activeLecture: LectureSession | null;
+  currentChapterId: string;
   activeSessionId: string;
   onActiveSessionChange: (sessionId: string) => void;
   onSessionChange: (session: QuizSession) => void;
@@ -1619,6 +2540,9 @@ function QuizView({
   );
   const [focusOverride, setFocusOverride] = useState<string | null>(null);
   const [linkToCurrentLecture, setLinkToCurrentLecture] = useState(true);
+  const [configPanelCollapsed, setConfigPanelCollapsed] = useState(false);
+  const [configPanelPeek, setConfigPanelPeek] = useState(false);
+  const [configPreferenceReady, setConfigPreferenceReady] = useState(false);
   const topic = topicOverride ?? primaryQuiz.topic;
   const difficulty = difficultyOverride ?? recommendedDifficulty;
   const focus = focusOverride ?? primaryQuiz.focus;
@@ -1639,6 +2563,33 @@ function QuizView({
     () => summarizeQuizBlueprint(blueprint),
     [blueprint],
   );
+  const configPanelVisible = !configPanelCollapsed || configPanelPeek;
+
+  useEffect(() => {
+    try {
+      // Restoring a device-local layout preference requires one client-only update.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setConfigPanelCollapsed(
+        window.localStorage.getItem(QUIZ_CONFIG_PANEL_PREFERENCE_KEY) === "true",
+      );
+    } catch {
+      // Keep the generation settings visible when local preferences are unavailable.
+    } finally {
+      setConfigPreferenceReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!configPreferenceReady) return;
+    try {
+      window.localStorage.setItem(
+        QUIZ_CONFIG_PANEL_PREFERENCE_KEY,
+        String(configPanelCollapsed),
+      );
+    } catch {
+      // The panel still works for the current session when storage is unavailable.
+    }
+  }, [configPanelCollapsed, configPreferenceReady]);
 
   async function generateQuiz(event: FormEvent) {
     event.preventDefault();
@@ -1652,6 +2603,10 @@ function QuizView({
       const responses: AgentResponse[] = [];
       const nextQuestions: QuizQuestion[] = [];
       const sessionId = uid("quiz-session");
+      const requestChapterId =
+        linkToCurrentLecture && activeLecture
+          ? activeLecture.chapterId
+          : currentChapterId;
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
         const batch = batches[batchIndex];
         setGenerationProgress(
@@ -1666,18 +2621,28 @@ function QuizView({
         ].join("\n");
         const response = await runAgent(
           buildAgentRequest({
-            userId: ACTIVE_USER_ID,
+            userId,
             courseId: ACTIVE_COURSE_ID,
-            chapterId:
-              linkToCurrentLecture && activeLecture
-                ? activeLecture.chapterId
-                : ACTIVE_CHAPTER_ID,
+            chapterId: requestChapterId,
             prompt,
             contentType: "quiz",
             scores,
             profile,
+            quizBlueprint: {
+              question_count: batch.length,
+              slots: batch.map((slot) => ({
+                sequence: slot.sequence,
+                question_type: slot.questionType,
+                difficulty: slot.difficulty,
+                points: slot.points,
+                capability_dimension: slot.capabilityDimension,
+                question_purpose: "chapter_core",
+                related_gap_ids: [],
+              })),
+            },
           }),
         );
+        assertSuccessfulAgentResponse(response, "Quiz");
         const generated = asQuizQuestions(response);
         if (generated.length < batch.length) {
           throw new Error(
@@ -1685,17 +2650,26 @@ function QuizView({
           );
         }
         responses.push(response);
+        const savedQuiz = asRecord(asRecord(response.saved_outputs)?.quiz);
+        const backendArtifactId = String(savedQuiz?.artifact_id || "").trim();
         nextQuestions.push(
-          ...batch.map((slot, index) => applyBlueprintToQuestion(generated[index], slot)),
+          ...batch.map((slot, index) => {
+            const generatedQuestion = generated[index];
+            const rawQuestion = asRecord(generatedQuestion);
+            return {
+              ...applyBlueprintToQuestion(generatedQuestion, slot),
+              backend_artifact_id: backendArtifactId || undefined,
+              backend_question_id:
+                String(rawQuestion?.question_id || rawQuestion?.id || rawQuestion?.sequence || slot.sequence) ||
+                undefined,
+            };
+          }),
         );
         const partialResponse = mergeQuizResponses(responses, nextQuestions);
         const basePartialSession = createQuizSession({
           id: sessionId,
           courseId: ACTIVE_COURSE_ID,
-          chapterId:
-            linkToCurrentLecture && activeLecture
-              ? activeLecture.chapterId
-              : ACTIVE_CHAPTER_ID,
+          chapterId: requestChapterId,
           topic,
           focus,
           difficulty:
@@ -1797,7 +2771,7 @@ function QuizView({
         grading = await gradeSubjectiveQuizAnswer({
           question,
           userAnswer: selectedAnswer,
-          userId: ACTIVE_USER_ID,
+          userId,
           courseId: ACTIVE_COURSE_ID,
         });
       } catch (error) {
@@ -1817,8 +2791,8 @@ function QuizView({
   }
 
   return (
-    <div className="section-scroll">
-      <div className="section-container">
+    <div className="section-scroll quiz-section">
+      <div className="section-container quiz-section-container">
         <div className="section-intro">
           <div>
             <h2>生成个性化 Quiz</h2>
@@ -1829,10 +2803,46 @@ function QuizView({
           </div>
           <span className="orchestrator-badge">画像水平 · {profile.level}</span>
         </div>
-        <div className="quiz-grid">
-          <form className="card config-card" onSubmit={generateQuiz}>
-            <h3 className="card-title">Quiz 设置</h3>
-            <p className="card-subtitle">配置会被组织成任务描述传给调度器。</p>
+        <div
+          className={`quiz-grid ${configPanelCollapsed ? "config-panel-collapsed" : ""}`}
+        >
+          {configPanelVisible && (
+          <form
+            className={`card config-card ${configPanelCollapsed ? "overlay" : ""}`}
+            onSubmit={generateQuiz}
+            onMouseLeave={() => {
+              if (configPanelCollapsed) setConfigPanelPeek(false);
+            }}
+          >
+            <div className="config-card-header">
+              <div>
+                <span className="eyebrow">个性化测验</span>
+                <h3 className="card-title">生成设置</h3>
+              </div>
+              <div className="config-card-actions">
+                <span className="config-count-chip">{blueprintSummary.total} 题</span>
+                <button
+                  type="button"
+                  className="panel-collapse-button quiz-config-collapse"
+                  aria-label={
+                    configPanelCollapsed ? "固定展开题目生成设置" : "隐藏题目生成设置"
+                  }
+                  title={
+                    configPanelCollapsed ? "固定展开题目生成设置" : "隐藏题目生成设置"
+                  }
+                  onClick={() => {
+                    if (configPanelCollapsed) {
+                      setConfigPanelCollapsed(false);
+                    } else {
+                      setConfigPanelCollapsed(true);
+                    }
+                    setConfigPanelPeek(false);
+                  }}
+                >
+                  <span className="panel-collapse-icon" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
             <div className="form-field">
               <label htmlFor="quiz-topic">主题或知识点</label>
               <input
@@ -1861,8 +2871,7 @@ function QuizView({
             )}
             <div className="quiz-recommendations">
               <div className="quiz-recommendations-head">
-                <span>根据 Memory 推荐</span>
-                <small>{recommendations.contextLabel}</small>
+                <span>Memory 推荐主题</span>
               </div>
               <div className="quiz-recommendation-list">
                 {recommendations.quizOptions.map((option) => (
@@ -1879,58 +2888,40 @@ function QuizView({
                     }}
                   >
                     <strong>{option.topic}</strong>
-                    <span>{option.reason}</span>
                   </button>
                 ))}
               </div>
             </div>
-            <div className="form-field">
-              <label htmlFor="quiz-count">题目数量</label>
-              <input
-                type="number"
-                id="quiz-count"
-                className="input"
-                min={MIN_QUIZ_QUESTION_COUNT}
-                max={MAX_QUIZ_QUESTION_COUNT}
-                value={count}
-                onChange={(event) => setCount(event.target.value)}
-                onBlur={() => setCount(String(normalizeQuizCount(count)))}
-              />
-              <small className="field-hint">
-                默认 50 题，可输入 {MIN_QUIZ_QUESTION_COUNT}～{MAX_QUIZ_QUESTION_COUNT} 题；至少 8
-                题以覆盖全部能力维度。
-              </small>
-            </div>
-            <div className="form-field">
-              <label htmlFor="quiz-difficulty">难度</label>
-              <select
-                id="quiz-difficulty"
-                className="select"
-                value={difficulty}
-                onChange={(event) => setDifficultyOverride(event.target.value)}
-              >
-                <option value="easy">基础</option>
-                <option value="medium">中等</option>
-                <option value="hard">进阶</option>
-              </select>
-            </div>
-            <div className="quiz-blueprint-card">
-              <div>
-                <strong>本次测验蓝图</strong>
-                <span>{blueprintSummary.total} 题 · {blueprintSummary.totalPoints} 分原始分</span>
+            <div className="quiz-compact-fields">
+              <div className="form-field">
+                <label htmlFor="quiz-count">题目数量</label>
+                <input
+                  type="number"
+                  id="quiz-count"
+                  className="input"
+                  min={MIN_QUIZ_QUESTION_COUNT}
+                  max={MAX_QUIZ_QUESTION_COUNT}
+                  value={count}
+                  onChange={(event) => setCount(event.target.value)}
+                  onBlur={() => setCount(String(normalizeQuizCount(count)))}
+                />
               </div>
-              <div className="quiz-blueprint-tags">
-                {(Object.entries(blueprintSummary.byType) as Array<[QuizQuestionType, number]>).map(
-                  ([type, value]) => (
-                    <span key={type}>{QUIZ_TYPE_LABELS[type]} {value}</span>
-                  ),
-                )}
-                <span>难度 3:5:2</span>
-                <span>八维全覆盖</span>
+              <div className="form-field">
+                <label htmlFor="quiz-difficulty">难度</label>
+                <select
+                  id="quiz-difficulty"
+                  className="select"
+                  value={difficulty}
+                  onChange={(event) => setDifficultyOverride(event.target.value)}
+                >
+                  <option value="easy">基础</option>
+                  <option value="medium">中等</option>
+                  <option value="hard">进阶</option>
+                </select>
               </div>
             </div>
             <div className="form-field">
-              <label htmlFor="quiz-focus">考查重点</label>
+              <label htmlFor="quiz-focus">考查重点（可选）</label>
               <textarea
                 id="quiz-focus"
                 className="input"
@@ -1940,20 +2931,37 @@ function QuizView({
                 }}
               />
             </div>
-            <button
-              type="submit"
-              className="primary-button"
-              disabled={busy || generationRunning || !topic.trim()}
-              data-testid="quiz-generate"
-            >
-              {generationProgress ||
-                (generationRunning
-                  ? "题目正在生成…"
-                  : busy
-                    ? "中央调度器处理中…"
-                    : `生成 ${blueprintSummary.total} 题 Quiz`)}
-            </button>
+            <div className="quiz-config-footer">
+              <span>自动覆盖四类题型与八维岗位能力</span>
+              <button
+                type="submit"
+                className="primary-button quiz-generate-button"
+                disabled={busy || generationRunning || !topic.trim()}
+                data-testid="quiz-generate"
+              >
+                {generationProgress ||
+                  (generationRunning
+                    ? "题目正在生成…"
+                    : busy
+                      ? "中央调度器处理中…"
+                      : `生成 ${blueprintSummary.total} 题 Quiz →`)}
+              </button>
+            </div>
           </form>
+          )}
+          {configPanelCollapsed && (
+            <button
+              type="button"
+              className="history-edge-trigger quiz-config-edge-trigger"
+              aria-label="显示题目生成设置"
+              title="显示题目生成设置"
+              onMouseEnter={() => setConfigPanelPeek(true)}
+              onFocus={() => setConfigPanelPeek(true)}
+              onClick={() => setConfigPanelCollapsed(false)}
+            >
+              <span aria-hidden="true" />
+            </button>
+          )}
           <section className="card quiz-result-card">
             <div className="quiz-panel-tabs" role="tablist" aria-label="Quiz 视图">
               <button
@@ -2377,7 +3385,31 @@ function QuizQuestionOverview({
   );
 }
 
+function nextBackendLearningPathChapter(
+  learningPath: UserLearningPath | null,
+  chapterId: string,
+): { id: string; title: string } | null {
+  if (!learningPath?.chapters.length) return nextCourseChapter(chapterId);
+  const ordered = [...learningPath.chapters].sort(
+    (left, right) => left.chapter_order - right.chapter_order,
+  );
+  const currentIndex = ordered.findIndex(
+    (chapter) => chapter.chapter_id === chapterId,
+  );
+  const explicitNextId =
+    currentIndex >= 0 ? ordered[currentIndex].next_chapter_id : null;
+  const next = explicitNextId
+    ? ordered.find((chapter) => chapter.chapter_id === explicitNextId)
+    : currentIndex >= 0
+      ? ordered[currentIndex + 1]
+      : undefined;
+  return next
+    ? { id: next.chapter_id, title: next.chapter_title }
+    : null;
+}
+
 function LectureView({
+  userId,
   sessions,
   activeSessionId,
   onActiveSessionChange,
@@ -2385,11 +3417,13 @@ function LectureView({
   profile,
   scores,
   progress,
+  learningPath,
   capabilityEvidence,
   busy,
   runAgent,
   onProgressChanged,
 }: {
+  userId: string;
   sessions: LectureSession[];
   activeSessionId: string;
   onActiveSessionChange: (sessionId: string) => void;
@@ -2397,6 +3431,7 @@ function LectureView({
   profile: LearnerProfile;
   scores: ScoreMap;
   progress: LearningProgressResult;
+  learningPath: UserLearningPath | null;
   capabilityEvidence: CapabilityEvidence[];
   busy: boolean;
   runAgent: (request: AgentRequest) => Promise<AgentResponse>;
@@ -2404,8 +3439,63 @@ function LectureView({
 }) {
   const [lectureError, setLectureError] = useState("");
   const [confirmNext, setConfirmNext] = useState(false);
-  const activeLecture =
-    sessions.find((session) => session.id === activeSessionId) ?? sessions[0] ?? null;
+  const [generationState, setGenerationState] = useState<{
+    reason: LectureGenerationReason;
+    chapterId: string;
+  } | null>(null);
+  const backendChaptersById = useMemo(
+    () =>
+      new Map(
+        learningPath?.chapters.map((chapter) => [
+          chapter.chapter_id,
+          chapter.chapter_title.trim(),
+        ]) ?? [],
+      ),
+    [learningPath],
+  );
+  const hasBackendPath = backendChaptersById.size > 0;
+  const validSessions = useMemo(
+    () =>
+      hasBackendPath
+        ? sessions.filter(
+            (session) =>
+              backendChaptersById.get(session.chapterId) ===
+              session.chapterTitle.trim(),
+          )
+        : sessions,
+    [backendChaptersById, hasBackendPath, sessions],
+  );
+  const legacySessions = useMemo(
+    () =>
+      hasBackendPath
+        ? sessions.filter(
+            (session) =>
+              backendChaptersById.get(session.chapterId) !==
+              session.chapterTitle.trim(),
+          )
+        : [],
+    [backendChaptersById, hasBackendPath, sessions],
+  );
+  const currentChapterId =
+    learningPath?.current_chapter_id ||
+    progress.currentChapterId ||
+    ACTIVE_CHAPTER_ID;
+  const currentPathChapter = learningPath?.chapters.find(
+    (chapter) => chapter.chapter_id === currentChapterId,
+  );
+  const selectedLecture = validSessions.find(
+    (session) => session.id === activeSessionId,
+  );
+  const currentChapterLecture = validSessions.find(
+    (session) => session.chapterId === currentChapterId,
+  );
+  const activeLecture = selectedLecture ?? currentChapterLecture ?? null;
+  const lectureGenerating = generationState !== null;
+
+  useEffect(() => {
+    const resolvedId = activeLecture?.id ?? "";
+    if (resolvedId !== activeSessionId) onActiveSessionChange(resolvedId);
+  }, [activeLecture?.id, activeSessionId, onActiveSessionChange]);
   const mastery = useMemo(
     () =>
       activeLecture
@@ -2414,7 +3504,7 @@ function LectureView({
     [activeLecture, capabilityEvidence],
   );
   const nextChapter = activeLecture
-    ? nextCourseChapter(activeLecture.chapterId)
+    ? nextBackendLearningPathChapter(learningPath, activeLecture.chapterId)
     : null;
 
   async function requestLecture(
@@ -2423,8 +3513,13 @@ function LectureView({
     predecessor: LectureSession | null,
   ) {
     setLectureError("");
+    const pathChapter = learningPath?.chapters.find(
+      (chapter) => chapter.chapter_id === chapterId,
+    );
     const chapterTitle =
-      (reason === "next_stage" ? nextCourseChapter(chapterId)?.title : null) ||
+      (reason === "next_stage"
+        ? nextBackendLearningPathChapter(learningPath, chapterId)?.title
+        : pathChapter?.chapter_title) ||
       predecessor?.chapterTitle ||
       progress.currentChapterTitle;
     const prompt = [
@@ -2437,7 +3532,7 @@ function LectureView({
     const contentType = reason === "next_stage" ? "next_step" : "lecture";
     let response = await runAgent(
       buildAgentRequest({
-        userId: ACTIVE_USER_ID,
+        userId,
         courseId: ACTIVE_COURSE_ID,
         chapterId,
         prompt,
@@ -2448,14 +3543,22 @@ function LectureView({
       }),
     );
     const targetChapter =
-      reason === "next_stage" ? nextCourseChapter(chapterId) : null;
+      reason === "next_stage"
+        ? nextBackendLearningPathChapter(learningPath, chapterId)
+        : null;
     const targetChapterId = targetChapter?.id ?? chapterId;
+    const targetChapterTitle =
+      targetChapter?.title ||
+      learningPath?.chapters.find(
+        (chapter) => chapter.chapter_id === targetChapterId,
+      )?.chapter_title;
     let session: LectureSession;
     try {
       session = createLectureSession({
         id: uid("lecture-session"),
         courseId: ACTIVE_COURSE_ID,
         chapterId: targetChapterId,
+        chapterTitle: targetChapterTitle,
         response,
         capabilityEvidence,
         generationReason: reason,
@@ -2468,7 +3571,7 @@ function LectureView({
       // chapter without inventing any local content.
       response = await runAgent(
         buildAgentRequest({
-          userId: ACTIVE_USER_ID,
+          userId,
           courseId: ACTIVE_COURSE_ID,
           chapterId: targetChapterId,
           prompt: prompt.replace(chapterId, targetChapterId),
@@ -2482,6 +3585,7 @@ function LectureView({
         id: uid("lecture-session"),
         courseId: ACTIVE_COURSE_ID,
         chapterId: targetChapterId,
+        chapterTitle: targetChapterTitle,
         response,
         capabilityEvidence,
         generationReason: reason,
@@ -2497,17 +3601,21 @@ function LectureView({
     chapterId: string,
     predecessor: LectureSession | null,
   ) {
+    if (lectureGenerating) return;
+    setGenerationState({ reason, chapterId });
     try {
       await requestLecture(reason, chapterId, predecessor);
     } catch (error) {
       setLectureError(
         error instanceof Error ? error.message : "学习讲义生成失败，请检查中央调度器",
       );
+    } finally {
+      setGenerationState(null);
     }
   }
 
   function requestNextStage() {
-    if (!activeLecture || !nextChapter || busy) return;
+    if (!activeLecture || !nextChapter || busy || lectureGenerating) return;
     if (!mastery?.recommendedForNextStage) {
       setConfirmNext(true);
       return;
@@ -2523,11 +3631,11 @@ function LectureView({
             <h2>讲义记录</h2>
             <p>已生成的讲义会自动保存</p>
           </div>
-          <span>{sessions.length}</span>
+          <span>{validSessions.length}</span>
         </div>
         <div className="lecture-history-list">
-          {sessions.length ? (
-            sessions.map((lecture) => {
+          {validSessions.length ? (
+            validSessions.map((lecture) => {
               const itemMastery = calculateLectureMastery(
                 lecture,
                 capabilityEvidence,
@@ -2556,6 +3664,11 @@ function LectureView({
           ) : (
             <div className="lecture-history-empty">生成第一份讲义后，这里会形成个人讲义库。</div>
           )}
+          {legacySessions.length > 0 && (
+            <div className="lecture-legacy-note">
+              已保留并隐藏 {legacySessions.length} 条旧目录讲义，避免其干扰当前学习路径。
+            </div>
+          )}
         </div>
       </aside>
 
@@ -2566,18 +3679,25 @@ function LectureView({
             <h2>从当前阶段开始学习</h2>
             <p>
               知链将依据你的 Memory、岗位学习进度和 RAG 知识库，生成章节
-              {progress.currentChapterId}「{progress.currentChapterTitle}」讲义。
+              {currentChapterId}「
+              {currentPathChapter?.chapter_title || progress.currentChapterTitle}
+              」讲义。
             </p>
             <button
               type="button"
               className="primary-button"
-              disabled={busy}
+              disabled={busy || lectureGenerating}
               onClick={() =>
-                void generate("initial", progress.currentChapterId, null)
+                void generate("initial", currentChapterId, null)
               }
             >
-              {busy ? "中央调度器生成中…" : "生成当前阶段讲义"}
+              {lectureGenerating ? "中央调度器生成中…" : "生成当前阶段讲义"}
             </button>
+            {lectureGenerating && (
+              <p className="lecture-generation-status">
+                正在检索章节资料并执行多 Agent 生成与核验，通常需要 1–2 分钟，请勿重复点击。
+              </p>
+            )}
             {lectureError && <p className="inline-error">{lectureError}</p>}
           </div>
         ) : (
@@ -2596,7 +3716,7 @@ function LectureView({
                 <button
                   type="button"
                   className="secondary-button"
-                  disabled={busy}
+                  disabled={busy || lectureGenerating}
                   onClick={() =>
                     void generate(
                       "regenerate",
@@ -2605,16 +3725,27 @@ function LectureView({
                     )
                   }
                 >
-                  重新生成
+                  {generationState?.reason === "regenerate"
+                    ? "正在重新生成…"
+                    : "重新生成"}
                 </button>
                 <button
                   type="button"
                   className="primary-button"
-                  disabled={busy || !nextChapter}
+                  disabled={busy || lectureGenerating || !nextChapter}
                   onClick={requestNextStage}
                 >
-                  {nextChapter ? "生成下阶段讲义" : "已是最后阶段"}
+                  {generationState?.reason === "next_stage"
+                    ? "正在生成下阶段…"
+                    : nextChapter
+                      ? "生成下阶段讲义"
+                      : "已是最后阶段"}
                 </button>
+                {lectureGenerating && (
+                  <p className="lecture-generation-status">
+                    正在检索章节资料并执行多 Agent 生成与核验，通常需要 1–2 分钟，请勿重复点击。
+                  </p>
+                )}
                 {mastery && (
                   <p className={mastery.recommendedForNextStage ? "ready" : "hold"}>
                     {mastery.message}
@@ -2628,14 +3759,7 @@ function LectureView({
                 {activeLecture.sections.map((section, index) => (
                   <article key={`${section.heading}-${index}`}>
                     <h3>{section.heading}</h3>
-                    <MarkdownContent
-                      baseUrl={
-                        activeLecture.artifactPath
-                          ? storageMarkdownBaseUrl(activeLecture.artifactPath)
-                          : undefined
-                      }
-                      content={section.content}
-                    />
+                    <MarkdownContent content={section.content} />
                   </article>
                 ))}
               </div>
@@ -2718,13 +3842,176 @@ function LectureView({
   );
 }
 
-function LearningProgressView({
+type RadarMetric = {
+  id: string;
+  label: string;
+  value: number;
+  displayValue: string;
+};
+
+function boundedPercent(value: number): number {
+  return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+}
+
+function firstNumber(value: string): number | null {
+  const match = value.match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function gateCompletion(gate: ProgressGate): number {
+  if (gate.passed) return 100;
+  const current = firstNumber(gate.current);
+  const requirement = firstNumber(gate.requirement);
+  if (current === null || requirement === null || requirement <= 0) return 0;
+  return boundedPercent((current / requirement) * 100);
+}
+
+function stageGateRadarItems(gates: ProgressGate[]): RadarMetric[] {
+  const mapped = gates.map((gate) => ({
+    id: gate.id,
+    label: gate.label,
+    value: gateCompletion(gate),
+    displayValue: gate.passed ? "已达标" : `${Math.round(gateCompletion(gate))}%`,
+  }));
+  const core =
+    mapped.length > 8
+      ? [
+          ...mapped.slice(0, 7),
+          {
+            id: "combined-evidence-gates",
+            label: "证据完备",
+            value: Math.min(...mapped.slice(7).map((item) => item.value)),
+            displayValue: `${mapped.slice(7).filter((item) => item.value >= 100).length}/${mapped.slice(7).length} 项`,
+          },
+        ]
+      : [...mapped];
+  if (!core.length) {
+    return Array.from({ length: 8 }, (_, index) => ({
+      id: `empty-gate-${index}`,
+      label: "",
+      value: 0,
+      displayValue: "",
+    }));
+  }
+  const sources = [...core];
+  let repeatIndex = 0;
+  while (core.length < 8) {
+    const source = sources[repeatIndex % sources.length];
+    core.push({
+      ...source,
+      id: `${source.id}-repeat-${repeatIndex}`,
+      label: "",
+      displayValue: "",
+    });
+    repeatIndex += 1;
+  }
+  return core.slice(0, 8);
+}
+
+function radarVertex(value: number, index: number, radius = 44) {
+  const angle = ((-90 + index * 45) * Math.PI) / 180;
+  const scaledRadius = radius * (boundedPercent(value) / 100);
+  return {
+    x: 50 + Math.cos(angle) * scaledRadius,
+    y: 50 + Math.sin(angle) * scaledRadius,
+  };
+}
+
+function radarClipPath(items: RadarMetric[]): string {
+  const points = items
+    .slice(0, 8)
+    .map((item, index) => {
+      const point = radarVertex(item.value, index);
+      return `${point.x}% ${point.y}%`;
+    })
+    .join(", ");
+  return `polygon(${points})`;
+}
+
+function OctagonRadar({
+  items,
+  centerValue,
+  centerLabel,
+  ariaLabel,
+  tone,
+}: {
+  items: RadarMetric[];
+  centerValue: string;
+  centerLabel: string;
+  ariaLabel: string;
+  tone: "gate" | "capability";
+}) {
+  return (
+    <div className={`octagon-radar ${tone}`} role="img" aria-label={ariaLabel}>
+      <div className="octagon-radar-plot">
+        <div className="octagon-radar-grid" aria-hidden="true">
+          {[1, 0.75, 0.5, 0.25].map((scale) => (
+            <span
+              className="octagon-grid-ring"
+              key={scale}
+              style={{ transform: `scale(${scale})` }}
+            />
+          ))}
+          {[0, 45, 90, 135].map((angle) => (
+            <span
+              className="octagon-grid-spoke"
+              key={angle}
+              style={{ transform: `rotate(${angle}deg)` }}
+            />
+          ))}
+          <span
+            className="octagon-radar-fill"
+            style={{ clipPath: radarClipPath(items) }}
+          />
+          {items.slice(0, 8).map((item, index) => {
+            const point = radarVertex(item.value, index);
+            return (
+              <span
+                className="octagon-radar-point"
+                key={item.id}
+                style={{ left: `${point.x}%`, top: `${point.y}%` }}
+              />
+            );
+          })}
+          <span className="octagon-radar-center">
+            <strong>{centerValue}</strong>
+            <small>{centerLabel}</small>
+          </span>
+        </div>
+        {items.slice(0, 8).map((item, index) => {
+          if (!item.label) return null;
+          const angle = ((-90 + index * 45) * Math.PI) / 180;
+          const position = {
+            left: `${50 + Math.cos(angle) * 45}%`,
+            top: `${50 + Math.sin(angle) * 45}%`,
+          };
+          return (
+            <span className="octagon-radar-label" key={`${item.id}-label`} style={position}>
+              <strong>{item.label}</strong>
+              <small>{item.displayValue}</small>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MoreInfoDrawer({
+  userId,
+  open,
+  onClose,
   progress,
   profile,
   scores,
   busy,
   runAgent,
 }: {
+  userId: string;
+  open: boolean;
+  onClose: () => void;
   progress: LearningProgressResult;
   profile: LearnerProfile;
   scores: ScoreMap;
@@ -2735,10 +4022,19 @@ function LearningProgressView({
   const [planSources, setPlanSources] = useState<string[]>([]);
   const [planError, setPlanError] = useState("");
 
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose, open]);
+
   async function generateNextPlan() {
     setPlanError("");
     const prompt = [
-      `请根据当前学习进度，为学习者生成一个可立即执行的下一步训练任务。`,
+      "请根据当前学习进度，为学习者生成一个可立即执行的下一步训练任务。",
       `当前阶段：${progress.currentStageLabel}。`,
       `当前章节：${progress.currentChapterId} ${progress.currentChapterTitle}。`,
       `主要阻塞项：${progress.blockers.join("；") || "暂无"}。`,
@@ -2747,7 +4043,7 @@ function LearningProgressView({
     try {
       const response = await runAgent(
         buildAgentRequest({
-          userId: ACTIVE_USER_ID,
+          userId,
           courseId: ACTIVE_COURSE_ID,
           chapterId: progress.currentChapterId,
           prompt,
@@ -2777,209 +4073,635 @@ function LearningProgressView({
           .slice(0, 5),
       );
     } catch (error) {
-      setPlanError(error instanceof Error ? error.message : "下一步训练方案生成失败");
+      setPlanError(
+        error instanceof Error ? error.message : "下一步训练方案生成失败",
+      );
     }
   }
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="more-info-backdrop"
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <aside
+        className="more-info-drawer"
+        id="more-info-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="more-info-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="more-info-header">
+          <div>
+            <span>学习进度辅助信息</span>
+            <h2 id="more-info-title">更多信息</h2>
+          </div>
+          <button type="button" aria-label="关闭更多信息" onClick={onClose}>
+            ×
+          </button>
+        </header>
+
+        <div className="more-info-body">
+          <section className="more-info-summary">
+            <div>
+              <span>当前阶段</span>
+              <strong>{progress.currentStageLabel}</strong>
+            </div>
+            <div>
+              <span>综合进度</span>
+              <strong>{progress.overallProgress}%</strong>
+            </div>
+            <p>
+              当前章节 {progress.currentChapterId}「{progress.currentChapterTitle}」
+            </p>
+          </section>
+
+          <details className="more-info-section" open>
+            <summary>
+              <span>评价标准</span>
+              <small>达标条件与八维能力规则</small>
+            </summary>
+            <div className="more-info-section-content">
+              <h3>{progress.currentStageLabel} 达标条件</h3>
+              <p className="more-info-explanation">
+                每项条件单独判断；安全、实操和审核证据属于硬门槛，不能由其他高分抵消。
+              </p>
+              <div className="drawer-gate-list">
+                {progress.gates.map((gate) => (
+                  <div className={gate.passed ? "passed" : "pending"} key={gate.id}>
+                    <span>{gate.passed ? "✓" : "!"}</span>
+                    <div>
+                      <strong>{gate.label}</strong>
+                      <small>当前 {gate.current} · 要求 {gate.requirement}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <h3>八维岗位能力评分</h3>
+              <div className="drawer-dimension-list">
+                {progress.dimensions.map((dimension) => (
+                  <div key={dimension.id}>
+                    <span>{dimension.label}</span>
+                    <strong>权重 {dimension.weight}%</strong>
+                    <small>
+                      {dimension.ratingStatus === "unassessed"
+                        ? "待评估"
+                        : dimension.ratingStatus === "insufficient"
+                          ? `暂估 ${dimension.score ?? 0} 分`
+                          : `${dimension.score ?? 0} 分`}
+                    </small>
+                  </div>
+                ))}
+              </div>
+              <ul className="scoring-rule-list">
+                <li>分数范围为0–100分，由客观测验、审核实操和外部考核证据计算。</li>
+                <li>难度、时间衰减、证据来源和评分可信度共同影响证据权重。</li>
+                <li>采用中性先验抑制小样本高分，重复题目不会反复提高能力评级。</li>
+                <li>至少4条独立证据、3个知识点和2次独立测验后才可形成正式等级。</li>
+              </ul>
+            </div>
+          </details>
+
+          <details className="more-info-section">
+            <summary>
+              <span>评价证据概览</span>
+              <small>数据来源与评级覆盖</small>
+            </summary>
+            <div className="more-info-section-content">
+              <div className="drawer-evidence-grid">
+                <div><strong>{progress.evidence.rawTraceCount}</strong><span>原始操作记录</span></div>
+                <div><strong>{progress.evidence.effectiveEvidenceCount}</strong><span>独立有效证据</span></div>
+                <div><strong>{progress.evidence.ratedDimensionCount}/8</strong><span>可评级维度</span></div>
+                <div><strong>{progress.evidence.groundedEvidenceCount}</strong><span>RAG有依据</span></div>
+              </div>
+              <p className="more-info-explanation">
+                Quiz {progress.evidence.quizEvidenceCount} 条 · 实操 {progress.evidence.practicalEvidenceCount} 条 ·
+                外部考核 {progress.evidence.externalAssessmentCount} 条。
+              </p>
+            </div>
+          </details>
+
+          <details className="more-info-section" open>
+            <summary>
+              <span>下一步学习任务</span>
+              <small>结合Memory、门槛与RAG生成</small>
+            </summary>
+            <div className="more-info-section-content">
+              <div className="drawer-blocker-list">
+                {(progress.blockers.length
+                  ? progress.blockers
+                  : ["当前阶段已达标，可进入下一阶段复核"]
+                )
+                  .slice(0, 4)
+                  .map((blocker) => (
+                    <p key={blocker}><span>→</span>{blocker}</p>
+                  ))}
+              </div>
+              <button
+                type="button"
+                className="primary-button drawer-plan-button"
+                disabled={busy}
+                onClick={() => void generateNextPlan()}
+              >
+                {busy ? "中央调度器处理中…" : "生成下一步训练方案"}
+              </button>
+              {planError && <p className="inline-error">{planError}</p>}
+              {nextPlan && (
+                <div className="next-plan-result">
+                  <MarkdownContent content={nextPlan} />
+                  {!!planSources.length && (
+                    <div className="next-plan-sources">
+                      <strong>RAG依据</strong>
+                      {planSources.map((source) => (
+                        <span key={source}>{source.split(/[\\/]/).pop()}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </details>
+
+          <p className="more-info-disclaimer">
+            该结果属于知链内部岗位胜任评价，不等同于国家职业资格证书；正式上岗仍需企业、学校或有资质机构完成实操与安全复核。
+          </p>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function LearningProgressView({
+  progress,
+  learningPath,
+  learningPathLoading,
+  learningPathError,
+  onNavigate,
+}: {
+  progress: LearningProgressResult;
+  learningPath: UserLearningPath | null;
+  learningPathLoading: boolean;
+  learningPathError: string;
+  onNavigate: (view: View) => void;
+}) {
+  const [detailPanel, setDetailPanel] = useState<"gates" | "dimensions" | null>(
+    null,
+  );
+  const [expandedChapterId, setExpandedChapterId] = useState("");
+  const [selectedSectionId, setSelectedSectionId] = useState("");
+
+  const pathChapters = useMemo(
+    () => learningPath?.chapters ?? [],
+    [learningPath?.chapters],
+  );
+  const curriculumGroups = useMemo(() => {
+    const groups = new Map<string, LearningPathChapter[]>();
+    for (const chapter of pathChapters) {
+      const groupNumber = chapter.chapter_id.split(".")[0] || "0";
+      const chapters = groups.get(groupNumber) ?? [];
+      chapters.push(chapter);
+      groups.set(groupNumber, chapters);
+    }
+    return Array.from(groups.entries()).map(([groupNumber, chapters]) => ({
+      id: `chapter_${groupNumber.padStart(2, "0")}`,
+      number: groupNumber,
+      title: `Chapter ${groupNumber} · ${chapters[0]?.chapter_id}–${chapters.at(-1)?.chapter_id}`,
+      summary: `${chapters.length} 个后端课程章节`,
+      chapters,
+    }));
+  }, [pathChapters]);
+
+  const progressByChapterId = useMemo(
+    () => new Map((learningPath?.progress ?? []).map((item) => [item.chapter_id, item])),
+    [learningPath?.progress],
+  );
+
+  useEffect(() => {
+    if (!detailPanel) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDetailPanel(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [detailPanel]);
 
   const currentStageIndex = ["l1", "l2", "l3", "job_ready"].indexOf(
     progress.currentStageId,
   );
+  const gateRadarItems = stageGateRadarItems(progress.gates);
+  const dimensionRadarItems: RadarMetric[] = progress.dimensions.map(
+    (dimension) => ({
+      id: dimension.id,
+      label: dimension.label,
+      value: dimension.score ?? 0,
+      displayValue:
+        dimension.ratingStatus === "unassessed"
+          ? "待评估"
+          : dimension.ratingStatus === "insufficient"
+            ? `暂估 ${dimension.score ?? 0}`
+            : `${dimension.score ?? 0} 分`,
+    }),
+  );
+  const passedGateCount = progress.gates.filter((gate) => gate.passed).length;
+  const quickActions: Array<{
+    view: Exclude<View, "progress">;
+    symbol: string;
+    label: string;
+  }> = [
+    { view: "chat", symbol: "问", label: "聊天问答" },
+    { view: "quiz", symbol: "测", label: "Quiz 生成" },
+    { view: "lecture", symbol: "学", label: "学习讲义" },
+    { view: "memory", symbol: "人", label: "用户中心" },
+  ];
+  const currentPathChapter =
+    pathChapters.find(
+      (chapter) => chapter.chapter_id === learningPath?.current_chapter_id,
+    ) ?? pathChapters[0];
+  const selectedSection =
+    pathChapters.find((chapter) => chapter.chapter_id === selectedSectionId) ??
+    currentPathChapter;
+  const activeCurriculumChapter =
+    curriculumGroups.find((group) => group.id === expandedChapterId) ??
+    curriculumGroups.find((group) =>
+      group.chapters.some(
+        (chapter) => chapter.chapter_id === selectedSection?.chapter_id,
+      ),
+    ) ?? curriculumGroups[0];
+  const effectiveExpandedChapterId = activeCurriculumChapter?.id ?? "";
+  const effectiveSelectedSectionId = selectedSection?.chapter_id ?? "";
+
+  const sectionLearningStatus = (sectionId: string) => {
+    const chapterProgress = progressByChapterId.get(sectionId);
+    const status = String(chapterProgress?.status || "").toLowerCase();
+    if (status === "completed" || Number(chapterProgress?.completion_rate || 0) >= 1) {
+      return "completed";
+    }
+    if (status === "needs_review") return "review";
+    if (
+      ["in_progress", "learning"].includes(status) ||
+      sectionId === learningPath?.current_chapter_id
+    ) {
+      return "current";
+    }
+    return "upcoming";
+  };
+
+  const selectCurriculumSection = (
+    chapterId: string,
+    sectionId: string,
+  ) => {
+    setExpandedChapterId(chapterId);
+    setSelectedSectionId(sectionId);
+  };
 
   return (
     <div className="progress-page">
-      <section className="progress-hero card">
-        <div className="progress-ring" style={{ "--progress": `${progress.overallProgress}%` } as React.CSSProperties}>
-          <span>{progress.overallProgress}%</span>
-          <small>达标条件完成度</small>
-        </div>
-        <div className="progress-hero-copy">
-          <span className="eyebrow">当前目标 · {progress.currentStageLabel}</span>
-          <h2>{progress.currentStageOutcome}</h2>
-          <p>
-            当前章节 {progress.currentChapterId}「{progress.currentChapterTitle}」。评价由客观学习证据自动计算，
-            用户画像只用于调整学习路径，不会直接增加能力分数。
-          </p>
-          <div className="progress-summary-chips">
-            <span>
-              已验证能力贡献 {progress.verifiedWeight ? `${progress.weightedMastery} 分` : "待形成"}
+      <main className="progress-surface">
+        <section className="progress-dashboard" aria-label="学习进度总览">
+          <div className="progress-dashboard-copy">
+            <span className="eyebrow">
+              {learningPathLoading
+                ? "正在读取后端学习路径"
+                : `当前学习路径 · ${learningPath?.path_title || progress.currentStageLabel}`}
             </span>
-            <span>能力暂估 {progress.provisionalMastery} 分</span>
-            <span>评价可信度 {progress.weightedConfidence}%</span>
-            <span>课程完成 {progress.courseCompletion}%</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="career-path card" aria-label="岗位成长路径">
-        <div className="section-heading">
-          <div>
-            <h3>从入门到岗位胜任</h3>
-            <p>课程目录与 L1/L2/L3 岗位能力门槛共同决定进度。</p>
-          </div>
-          <span className="model-chip">模型 {progress.modelVersion}</span>
-        </div>
-        <div className="career-path-steps">
-          {COURSE_PHASES.map((phase, index) => {
-            const completed = index === 0 || index < currentStageIndex + 1;
-            const active = phase.id === progress.currentStageId;
-            return (
-              <article
-                className={`career-step ${completed ? "completed" : ""} ${active ? "active" : ""}`}
-                key={phase.id}
-              >
-                <span className="career-step-index">{completed ? "✓" : index + 1}</span>
-                <div>
-                  <strong>{phase.label}</strong>
-                  <small>{phase.range}</small>
-                  <p>{phase.outcome}</p>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <div className="progress-grid">
-        <section className="card progress-gates-card">
-          <div className="section-heading">
-            <div>
-              <h3>{progress.currentStageLabel} 达标条件</h3>
-              <p>安全和实操属于硬门槛，不能由其他高分抵消。</p>
+            <h2>
+              {currentPathChapter
+                ? `${currentPathChapter.chapter_id} ${currentPathChapter.chapter_title}`
+                : `${progress.currentChapterId} ${progress.currentChapterTitle}`}
+            </h2>
+            <p>{currentPathChapter?.focus.summary || progress.currentStageOutcome}</p>
+            <div className="progress-dashboard-metrics" aria-label="核心学习指标">
+              <div><strong>{progress.courseCompletion}%</strong><span>课程完成</span></div>
+              <div><strong>{progress.provisionalMastery}</strong><span>能力暂估</span></div>
+              <div><strong>{progress.weightedConfidence}%</strong><span>评价可信度</span></div>
+              <div><strong>{passedGateCount}/{progress.gates.length}</strong><span>阶段条件</span></div>
             </div>
           </div>
-          <div className="progress-gates">
-            {progress.gates.map((gate) => (
-              <div className={`progress-gate ${gate.passed ? "passed" : "pending"}`} key={gate.id}>
-                <span className="gate-state">{gate.passed ? "✓" : "!"}</span>
-                <div>
-                  <strong>{gate.label}</strong>
-                  <p>当前 {gate.current} · 要求 {gate.requirement}</p>
-                </div>
-              </div>
-            ))}
+          <div
+            className="progress-dashboard-ring"
+            style={{ "--progress": `${progress.courseCompletion}%` } as React.CSSProperties}
+            aria-label={`课程完成 ${progress.courseCompletion}%`}
+          >
+            <strong>{progress.courseCompletion}%</strong>
+            <span>总体进度</span>
           </div>
         </section>
 
-        <section className="card evidence-layers-card">
-          <div className="section-heading">
+        <section className="progress-stage-strip" aria-labelledby="progress-stage-title">
+          <div className="progress-stage-heading">
             <div>
-            <h3>评价证据链</h3>
-              <p>原始事件保留审计记录，只有有效、独立且已核验的证据参与评级。</p>
+              <h3 id="progress-stage-title">岗位成长阶段</h3>
+              <p>阶段表示“能力到哪里”，与下方 Chapter 知识目录分开计算。</p>
             </div>
+            <span>模型 {progress.modelVersion}</span>
           </div>
-          <div className="evidence-layer-list">
-            <article>
-              <span>01</span>
-              <div><strong>原始操作记录</strong><p>{progress.evidence.rawTraceCount} 条提问、测验与 Memory 操作轨迹</p></div>
-            </article>
-            <article>
-              <span>02</span>
-              <div><strong>结构化评价证据</strong><p>{progress.evidence.effectiveEvidenceCount}/{progress.evidence.structuredEvidenceCount} 条有效证据 · {progress.evidence.assessedDimensionCount}/8 个维度已有观察</p></div>
-            </article>
-            <article>
-              <span>03</span>
-              <div><strong>派生能力与岗位结论</strong><p>{progress.evidence.ratedDimensionCount}/8 个维度达到评级证据门槛 · {progress.blockers.length} 个待补条件</p></div>
-            </article>
-          </div>
-          <div className="evidence-note">
-            <strong>证据构成</strong>
-            <span>Quiz {progress.evidence.quizEvidenceCount}</span>
-            <span>实操 {progress.evidence.practicalEvidenceCount}</span>
-            <span>外部考核 {progress.evidence.externalAssessmentCount}</span>
-            <span>RAG 有依据 {progress.evidence.groundedEvidenceCount}</span>
-          </div>
-        </section>
-      </div>
-
-      <div className="progress-grid lower">
-        <section className="card dimension-readiness-card">
-          <div className="section-heading">
-            <div>
-              <h3>八维岗位能力</h3>
-              <p>观察表现、保守能力估计和评价可信度分别展示；低样本不会被判定为熟练。</p>
-            </div>
-          </div>
-          <div className="dimension-progress-list">
-            {progress.dimensions.map((dimension) => {
-              const scoreText =
-                dimension.ratingStatus === "unassessed"
-                  ? "待评估"
-                  : dimension.ratingStatus === "insufficient"
-                    ? `暂估 ${dimension.score ?? 0} 分`
-                    : `${dimension.score ?? 0} 分`;
-              const channelText = (score: number | null, status: string) =>
-                status === "unassessed"
-                  ? "待评估"
-                  : status === "insufficient"
-                    ? `暂估 ${score ?? 0}`
-                    : `${score ?? 0}`;
+          <div className="progress-stage-track">
+            {COURSE_PHASES.map((phase, index) => {
+              const completed = index === 0 || index < currentStageIndex + 1;
+              const active = phase.id === progress.currentStageId;
               return (
-                <div className={`dimension-progress ${dimension.ratingStatus}`} key={dimension.id}>
-                  <div>
-                    <strong>{dimension.label}</strong>
-                    <span>{scoreText} · 权重 {dimension.weight}%</span>
-                  </div>
-                  <div className="dimension-track"><span style={{ width: `${dimension.score ?? 0}%` }} /></div>
-                  <small>
-                    观察表现 {dimension.observedScore === null ? "—" : `${dimension.observedScore} 分`} ·
-                    有效证据 {dimension.effectiveEvidenceCount} 条 · 可信度 {dimension.confidence}%
-                  </small>
-                  <div className="dimension-channel-list">
-                    <span>知识 {channelText(dimension.knowledgeScore, dimension.knowledgeStatus)}</span>
-                    <span>实操 {channelText(dimension.practiceScore, dimension.practiceStatus)}</span>
-                  </div>
+                <div className={`progress-stage-item ${completed ? "completed" : ""} ${active ? "active" : ""}`} key={phase.id}>
+                  <span>{completed ? "✓" : index + 1}</span>
+                  <div><strong>{phase.label}</strong><small>{phase.range}</small></div>
                 </div>
               );
             })}
           </div>
         </section>
 
-        <section className="card next-training-card">
-          <div className="section-heading">
+        <section className="progress-curriculum" aria-labelledby="curriculum-title">
+          <div className="progress-curriculum-heading">
             <div>
-              <h3>下一步学习任务</h3>
-              <p>由中央调度器结合 Memory、当前门槛和 RAG 知识库生成。</p>
+              <span className="eyebrow">
+                {learningPath
+                  ? `${learningPath.course_title} · 路径 ${learningPath.path_id}`
+                  : "后端真实课程目录"}
+              </span>
+              <h2 id="curriculum-title">{learningPath?.path_title || "课程学习地图"}</h2>
+              <p>
+                {learningPath?.assignment?.classification_reason ||
+                  "目录、章节顺序与学习状态均由当前用户的后端学习路径提供。"}
+              </p>
             </div>
+            <span className="curriculum-count">
+              {learningPathLoading ? "读取中" : `${pathChapters.length} 个章节`}
+            </span>
           </div>
-          <div className="blocker-list">
-            {(progress.blockers.length ? progress.blockers : ["当前阶段已达标，可进入下一阶段复核"]).slice(0, 4).map((blocker) => (
-              <p key={blocker}><span>→</span>{blocker}</p>
-            ))}
-          </div>
-          <button type="button" className="primary-button" disabled={busy} onClick={() => void generateNextPlan()}>
-            {busy ? "中央调度器处理中…" : "生成下一步训练方案"}
-          </button>
-          {planError && <p className="inline-error">{planError}</p>}
-          {nextPlan && (
-            <div className="next-plan-result">
-              <MarkdownContent content={nextPlan} />
-              {!!planSources.length && (
-                <div className="next-plan-sources">
-                  <strong>RAG 依据</strong>
-                  {planSources.map((source) => <span key={source}>{source.split(/[\\/]/).pop()}</span>)}
-                </div>
+
+          {learningPathLoading ? (
+            <div className="progress-curriculum-state" role="status">
+              正在读取后端分配路径、课程目录与章节进度…
+            </div>
+          ) : learningPathError || !learningPath || !pathChapters.length || !selectedSection || !activeCurriculumChapter ? (
+            <div className="progress-curriculum-state error" role="alert">
+              <strong>暂时无法读取后端真实学习路径</strong>
+              <span>{learningPathError || "后端没有返回可用章节。"}</span>
+            </div>
+          ) : (
+          <div className="progress-curriculum-layout">
+            <div className="chapter-accordion">
+              {curriculumGroups.map((chapter) => {
+                const active = effectiveExpandedChapterId === chapter.id;
+                const completedCount = chapter.chapters.filter(
+                  (section) => sectionLearningStatus(section.chapter_id) === "completed",
+                ).length;
+                const hasCurrent = chapter.chapters.some(
+                  (section) => ["current", "review"].includes(sectionLearningStatus(section.chapter_id)),
+                );
+                const chapterDone = completedCount === chapter.chapters.length;
+                return (
+                  <article className={`chapter-accordion-item ${hasCurrent ? "current" : ""} ${active ? "active" : ""}`} key={chapter.id}>
+                    <button
+                      type="button"
+                      className="chapter-accordion-trigger"
+                      aria-pressed={active}
+                      onClick={() =>
+                        selectCurriculumSection(
+                          chapter.id,
+                          chapter.chapters.find(
+                            (section) => ["current", "review"].includes(sectionLearningStatus(section.chapter_id)),
+                          )?.chapter_id ?? chapter.chapters[0].chapter_id,
+                        )
+                      }
+                    >
+                      <span className={`chapter-number ${chapterDone ? "completed" : hasCurrent ? "current" : ""}`}>
+                        {chapterDone ? "✓" : chapter.number}
+                      </span>
+                      <span className="chapter-trigger-copy">
+                        <strong>{chapter.title}</strong>
+                        <small>{chapter.summary}</small>
+                      </span>
+                      <span className="chapter-progress-label">
+                        {completedCount}/{chapter.chapters.length}
+                        <i>›</i>
+                      </span>
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="chapter-section-browser" aria-label={`${activeCurriculumChapter.title}小节`}>
+              <header>
+                <span>后端目录分组</span>
+                <strong>{activeCurriculumChapter.title}</strong>
+                <small>{activeCurriculumChapter.chapters.length} 个章节</small>
+              </header>
+              <div className="chapter-section-list">
+                {activeCurriculumChapter.chapters.map((section) => {
+                  const status = sectionLearningStatus(section.chapter_id);
+                  const selected = section.chapter_id === effectiveSelectedSectionId;
+                  return (
+                    <button
+                      type="button"
+                      className={`chapter-section-row ${status} ${selected ? "selected" : ""}`}
+                      key={section.chapter_id}
+                      onClick={() => selectCurriculumSection(activeCurriculumChapter.id, section.chapter_id)}
+                    >
+                      <span className="section-status-dot">{status === "completed" ? "✓" : ""}</span>
+                      <span>
+                        <strong>{section.chapter_id} {section.chapter_title}</strong>
+                        <small>{section.focus.summary}</small>
+                      </span>
+                      <em>
+                        {status === "completed"
+                          ? "已完成"
+                          : status === "review"
+                            ? "需要复习"
+                            : status === "current"
+                              ? "学习中"
+                              : "未开始"}
+                      </em>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <aside className="progress-next-panel" aria-label="当前小节与下一步操作">
+              <span className="eyebrow">已选择知识点</span>
+              <h3>{selectedSection.chapter_id} {selectedSection.chapter_title}</h3>
+              <p>{selectedSection.focus.summary}</p>
+              <div className="selected-section-context">
+                <span>顺序 {selectedSection.chapter_order}</span>
+                <span className={sectionLearningStatus(selectedSection.chapter_id)}>
+                  {sectionLearningStatus(selectedSection.chapter_id) === "completed"
+                    ? "已完成"
+                    : sectionLearningStatus(selectedSection.chapter_id) === "review"
+                      ? "需要复习"
+                      : sectionLearningStatus(selectedSection.chapter_id) === "current"
+                        ? "当前学习"
+                        : "待学习"}
+                </span>
+              </div>
+              <div className="selected-section-materials" aria-label="必需学习材料">
+                {selectedSection.required_material_types.map((materialType) => (
+                  <span key={materialType}>{learningMaterialLabel(materialType)}</span>
+                ))}
+              </div>
+              {selectedSection.next_chapter_id && (
+                <small className="selected-section-next">
+                  下一章节：{selectedSection.next_chapter_id}
+                </small>
               )}
-            </div>
+              <div className="progress-next-actions">
+                {quickActions.map((action) => (
+                  <button type="button" key={action.view} onClick={() => onNavigate(action.view)}>
+                    <span>{action.symbol}</span>
+                    <strong>{action.label}</strong>
+                    <small>打开</small>
+                  </button>
+                ))}
+              </div>
+              <small className="progress-next-note">这些入口仅负责页面跳转；现有接口、生成与保存逻辑保持不变。</small>
+            </aside>
+          </div>
           )}
         </section>
-      </div>
+
+        <details className="progress-assessment-disclosure">
+          <summary>
+            <span><strong>岗位能力评估</strong><small>达标条件与八维能力为辅助判断，不占用主要学习视线。</small></span>
+            <span>{progress.provisionalMastery} 分 · {passedGateCount}/{progress.gates.length} 项达标</span>
+          </summary>
+          <section className="progress-assessment" aria-labelledby="progress-assessment-title">
+            <div className="progress-assessment-heading">
+              <div><h2 id="progress-assessment-title">岗位胜任评价</h2><p>评分由真实学习证据自动更新，低样本不会被判定为熟练。</p></div>
+              <span className="assessment-status">可信度 {progress.weightedConfidence}%</span>
+            </div>
+            <div className="progress-radar-grid">
+              <section className="progress-gates-card radar-visual-card">
+                <div className="section-heading"><div><h3>{progress.currentStageLabel} 达标条件</h3><p>安全和实操属于硬门槛，不能由其他高分抵消。</p></div></div>
+                <div className="radar-card-body">
+                  <OctagonRadar items={gateRadarItems} centerValue={`${passedGateCount}/${progress.gates.length}`} centerLabel="条件已达标" ariaLabel={`${progress.currentStageLabel}达标条件八边形图`} tone="gate" />
+                  <button type="button" className="radar-detail-button" onClick={() => setDetailPanel("gates")}>查看详细分数</button>
+                </div>
+              </section>
+              <section className="dimension-readiness-card radar-visual-card">
+                <div className="section-heading"><div><h3>八维岗位能力</h3><p>观察表现、保守能力估计和评价可信度分别展示。</p></div></div>
+                <div className="radar-card-body">
+                  <OctagonRadar items={dimensionRadarItems} centerValue={`${progress.provisionalMastery}`} centerLabel="综合能力暂估" ariaLabel="八维岗位能力分数八边形图" tone="capability" />
+                  <button type="button" className="radar-detail-button" onClick={() => setDetailPanel("dimensions")}>查看详细分数</button>
+                </div>
+              </section>
+            </div>
+          </section>
+        </details>
 
       <p className="progress-method-note">
         说明：岗位能力采用固定权重、贝叶斯小样本收缩、独立尝试去重和来源审核。Quiz 只能形成知识证据；操作、质量与维护能力还必须有已复核的实操证据。本模型不等同于国家职业资格证书。
       </p>
+      </main>
+
+      {detailPanel && (
+        <div
+          className="score-detail-backdrop"
+          role="presentation"
+          onMouseDown={() => setDetailPanel(null)}
+        >
+          <section
+            className="score-detail-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="score-detail-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="score-detail-header">
+              <div>
+                <h2 id="score-detail-title">
+                  {detailPanel === "gates"
+                    ? `${progress.currentStageLabel} 达标条件明细`
+                    : "八维岗位能力分数明细"}
+                </h2>
+                <p>
+                  {detailPanel === "gates"
+                    ? "显示每项当前值、目标值和是否达标。"
+                    : "显示能力暂估、观察表现、证据数量、可信度及知识/实操分数。"}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="score-detail-close"
+                aria-label="关闭详细分数"
+                onClick={() => setDetailPanel(null)}
+              >
+                ×
+              </button>
+            </header>
+
+            {detailPanel === "gates" ? (
+              <div className="progress-gates score-detail-content">
+                {progress.gates.map((gate) => (
+                  <div
+                    className={`progress-gate ${gate.passed ? "passed" : "pending"}`}
+                    key={gate.id}
+                  >
+                    <span className="gate-state">{gate.passed ? "✓" : "!"}</span>
+                    <div>
+                      <strong>{gate.label}</strong>
+                      <p>当前 {gate.current} · 要求 {gate.requirement}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="dimension-progress-list score-detail-content">
+                {progress.dimensions.map((dimension) => {
+                  const scoreText =
+                    dimension.ratingStatus === "unassessed"
+                      ? "待评估"
+                      : dimension.ratingStatus === "insufficient"
+                        ? `暂估 ${dimension.score ?? 0} 分`
+                        : `${dimension.score ?? 0} 分`;
+                  const channelText = (score: number | null, status: string) =>
+                    status === "unassessed"
+                      ? "待评估"
+                      : status === "insufficient"
+                        ? `暂估 ${score ?? 0}`
+                        : `${score ?? 0}`;
+                  return (
+                    <div
+                      className={`dimension-progress ${dimension.ratingStatus}`}
+                      key={dimension.id}
+                    >
+                      <div>
+                        <strong>{dimension.label}</strong>
+                        <span>{scoreText} · 权重 {dimension.weight}%</span>
+                      </div>
+                      <div className="dimension-track">
+                        <span style={{ width: `${dimension.score ?? 0}%` }} />
+                      </div>
+                      <small>
+                        观察表现 {dimension.observedScore === null ? "—" : `${dimension.observedScore} 分`} ·
+                        有效证据 {dimension.effectiveEvidenceCount} 条 · 可信度 {dimension.confidence}%
+                      </small>
+                      <div className="dimension-channel-list">
+                        <span>知识 {channelText(dimension.knowledgeScore, dimension.knowledgeStatus)}</span>
+                        <span>实操 {channelText(dimension.practiceScore, dimension.practiceStatus)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
 
-function MemoryView({
+export function LegacyMemoryView({
   profile,
   assessment,
   progress,
   setProfile,
   events,
-  setEvents,
-  suggestions,
-  setSuggestions,
   busy,
   onReload,
   onSaved,
@@ -2989,47 +4711,65 @@ function MemoryView({
   progress: LearningProgressResult;
   setProfile: React.Dispatch<React.SetStateAction<LearnerProfile>>;
   events: MemoryEvent[];
-  setEvents: React.Dispatch<React.SetStateAction<MemoryEvent[]>>;
-  suggestions: PendingSuggestion[];
-  setSuggestions: React.Dispatch<React.SetStateAction<PendingSuggestion[]>>;
   busy: boolean;
   onReload: () => void | Promise<void>;
   onSaved: () => void | Promise<void>;
 }) {
   const capabilityResults = capabilityResultList(assessment, profile.level);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [logPanelCollapsed, setLogPanelCollapsed] = useState(false);
+  const [logPanelPeek, setLogPanelPeek] = useState(false);
+  const [logPreferenceReady, setLogPreferenceReady] = useState(false);
+  const dimensionRadarItems: RadarMetric[] = capabilityResults.map((result) => ({
+    id: result.id,
+    label: result.label,
+    value: result.score ?? 0,
+    displayValue:
+      result.score === null
+        ? "待评估"
+        : result.ratingStatus === "rated"
+          ? `${result.score} 分`
+          : `暂估 ${result.score}`,
+  }));
 
-  function applySuggestion(suggestion: PendingSuggestion) {
-    const patch = suggestion.patch;
-    if (patch.op === "remove") {
-      setProfile((current) => ({ ...current, [patch.path]: "" }));
-    } else {
-      setProfile((current) => ({
-        ...current,
-        [patch.path]: String(patch.value ?? ""),
-      }));
+  useEffect(() => {
+    try {
+      // Restoring a device-local layout preference requires one client-only update.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLogPanelCollapsed(
+        window.localStorage.getItem(MEMORY_LOG_PANEL_PREFERENCE_KEY) === "true",
+      );
+    } catch {
+      // Keep the update log visible when local preferences are unavailable.
+    } finally {
+      setLogPreferenceReady(true);
     }
-    setEvents((current) => [
-      {
-        id: uid("memory-update"),
-        title: "已应用 Agent 建议",
-        detail: suggestion.patch.reason,
-        time: new Date().toLocaleString("zh-CN", {
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      },
-      ...current,
-    ]);
-    setSuggestions((current) =>
-      current.filter((item) => item.id !== suggestion.id),
-    );
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!logPreferenceReady) return;
+    try {
+      window.localStorage.setItem(
+        MEMORY_LOG_PANEL_PREFERENCE_KEY,
+        String(logPanelCollapsed),
+      );
+    } catch {
+      // This local layout preference must never block Memory.
+    }
+  }, [logPanelCollapsed, logPreferenceReady]);
+
+  useEffect(() => {
+    if (!detailOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDetailOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [detailOpen]);
 
   return (
-    <div className="section-scroll">
-      <div className="section-container">
+    <div className="section-scroll memory-section">
+      <div className="section-container memory-section-container">
         <div className="section-intro">
           <div>
             <h2>学习者 Memory</h2>
@@ -3047,9 +4787,9 @@ function MemoryView({
             {busy ? "同步中…" : "从后端刷新"}
           </button>
         </div>
-        <div className="memory-grid">
-          <div className="memory-side">
-            <section className="card profile-card">
+        <div className={`memory-workspace ${logPanelCollapsed ? "log-panel-collapsed" : ""}`}>
+          <main className="memory-main-panel">
+            <section className="profile-card memory-profile-section">
               <h3 className="card-title">结构化画像</h3>
               <p className="card-subtitle">
                 对应接口中的 learner_profile，修改后自动用于下一次请求。
@@ -3116,17 +4856,38 @@ function MemoryView({
                 </button>
               </div>
             </section>
-            <section className="card scores-card">
+            <section className="scores-card memory-assessment-section">
               <div className="capability-card-heading">
                 <div>
                   <h3 className="card-title">能力评估</h3>
                   <p className="card-subtitle">
-                    观察正确率、保守能力估计、置信度和岗位评级分开展示。
+                    八维岗位能力由客观学习证据自动计算，低样本只显示暂估。
                   </p>
                 </div>
                 <span className="assessment-version">
                   {assessment.modelVersion}
                 </span>
+              </div>
+              <div className="memory-radar-summary">
+                <OctagonRadar
+                  items={dimensionRadarItems}
+                  centerValue={`${progress.provisionalMastery}`}
+                  centerLabel="综合能力暂估"
+                  ariaLabel="Memory 八维岗位能力八边形图"
+                  tone="capability"
+                />
+                <div className="memory-evidence-summary">
+                  <span><strong>{assessment.effectiveEvidenceCount}</strong> 独立有效证据</span>
+                  <span><strong>{assessment.ratedDimensionCount}/8</strong> 可评级维度</span>
+                  <span><strong>{progress.weightedConfidence}%</strong> 评价可信度</span>
+                </div>
+                <button
+                  type="button"
+                  className="radar-detail-button"
+                  onClick={() => setDetailOpen(true)}
+                >
+                  查看详细分数
+                </button>
               </div>
               <div className="assessment-summary">
                 <div>
@@ -3207,51 +4968,34 @@ function MemoryView({
                 </ol>
               </details>
             </section>
-          </div>
-          <div className="memory-side">
-            <section className="card memory-log-card">
-              <h3 className="card-title">待确认的画像建议</h3>
-              <p className="card-subtitle">
-                来自 profile_update_suggestions，不会自动覆盖现有画像。
-              </p>
-              {suggestions.length ? (
-                suggestions.slice(0, 4).map((suggestion) => (
-                  <div className="suggestion-card" key={suggestion.id}>
-                    <strong>
-                      画像字段 · {suggestion.patch.path}
-                    </strong>
-                    <p>{suggestion.patch.reason}</p>
-                    <div className="inline-actions">
-                      <button
-                        type="button"
-                        onClick={() => applySuggestion(suggestion)}
-                      >
-                        应用建议
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSuggestions((current) =>
-                            current.filter((item) => item.id !== suggestion.id),
-                          )
-                        }
-                      >
-                        忽略
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-activity">
-                  完成一次问答后，这里会显示 Agent 返回的画像更新建议；能力分数不接受主观建议。
+          </main>
+          {(!logPanelCollapsed || logPanelPeek) && (
+            <aside
+              className={`memory-log-panel ${logPanelCollapsed ? "overlay" : ""}`}
+              onMouseLeave={() => {
+                if (logPanelCollapsed) setLogPanelPeek(false);
+              }}
+            >
+              <div className="memory-log-heading">
+                <div>
+                  <h3>Memory 更新记录</h3>
+                  <p>{events.length} 条已保存的学习轨迹</p>
                 </div>
-              )}
-            </section>
-            <section className="card memory-log-card">
-              <h3 className="card-title">Memory 更新记录</h3>
-              <p className="card-subtitle">记录已确认的学习行为和画像变更。</p>
+                <button
+                  type="button"
+                  className="panel-collapse-button"
+                  aria-label="隐藏 Memory 更新记录"
+                  title="隐藏 Memory 更新记录"
+                  onClick={() => {
+                    setLogPanelCollapsed(true);
+                    setLogPanelPeek(false);
+                  }}
+                >
+                  <span className="panel-collapse-icon" aria-hidden="true" />
+                </button>
+              </div>
               <div className="memory-log">
-                {events.slice(0, 6).map((event) => (
+                {events.slice(0, 20).map((event) => (
                   <article className="memory-event" key={event.id}>
                     <div className="memory-event-head">
                       <strong>{event.title}</strong>
@@ -3261,9 +5005,95 @@ function MemoryView({
                   </article>
                 ))}
               </div>
+            </aside>
+          )}
+          {logPanelCollapsed && !logPanelPeek && (
+            <button
+              type="button"
+              className="history-edge-trigger memory-log-edge-trigger"
+              aria-label="显示 Memory 更新记录"
+              title="显示 Memory 更新记录"
+              onMouseEnter={() => setLogPanelPeek(true)}
+              onFocus={() => setLogPanelPeek(true)}
+              onClick={() => setLogPanelCollapsed(false)}
+            >
+              <span aria-hidden="true" />
+            </button>
+          )}
+        </div>
+
+        {detailOpen && (
+          <div
+            className="score-detail-backdrop"
+            role="presentation"
+            onMouseDown={() => setDetailOpen(false)}
+          >
+            <section
+              className="score-detail-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="memory-score-detail-title"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <header className="score-detail-header">
+                <div>
+                  <h2 id="memory-score-detail-title">八维岗位能力详细分数</h2>
+                  <p>显示能力暂估、观察表现、证据数量、独立测验次数和评价可信度。</p>
+                </div>
+                <button
+                  type="button"
+                  className="score-detail-close"
+                  aria-label="关闭详细分数"
+                  onClick={() => setDetailOpen(false)}
+                >
+                  ×
+                </button>
+              </header>
+              <div className="capability-list score-detail-content memory-score-details">
+                {capabilityResults.map((result) => (
+                  <article className="capability-row" key={result.id}>
+                    <div className="capability-row-head">
+                      <div>
+                        <strong>{result.label}</strong>
+                        <span>{result.description}</span>
+                      </div>
+                      <div className="capability-score">
+                        <strong>
+                          {result.score === null
+                            ? "—"
+                            : result.ratingStatus === "rated"
+                              ? result.score
+                              : `~${result.score}`}
+                        </strong>
+                        <span>{result.masteryLabel}</span>
+                      </div>
+                    </div>
+                    <div className={`score-track ${result.score === null ? "unassessed" : ""}`}>
+                      <div className="score-fill" style={{ width: `${result.score ?? 0}%` }} />
+                    </div>
+                    <div className="capability-meta">
+                      <span>观察表现：{result.observedScore === null ? "待评估" : `${result.observedScore}%`}</span>
+                      <span>{result.effectiveEvidenceCount} 条独立证据</span>
+                      <span>{result.independentAttemptCount} 次独立测验</span>
+                      <span>置信度：{result.confidenceLabel}</span>
+                      <span>{result.sourceCount ? `${result.sourceCount} 个知识来源` : "尚无 RAG 来源"}</span>
+                    </div>
+                  </article>
+                ))}
+                <details className="score-method">
+                  <summary>查看评分方法</summary>
+                  <ol>
+                    <li>观察表现按题目难度、作答时间和评分可信度加权。</li>
+                    <li>能力估计加入中性先验，防止少量题目造成虚高分数。</li>
+                    <li>同一题重复作答只保留首次独立证据。</li>
+                    <li>至少 4 条独立证据、3 个知识点和 2 次测验后才形成能力等级。</li>
+                    <li>理论证据与已审核实操证据分开计算。</li>
+                  </ol>
+                </details>
+              </div>
             </section>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

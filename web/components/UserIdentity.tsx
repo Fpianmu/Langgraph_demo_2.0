@@ -140,9 +140,15 @@ export function UserAvatar({
 export function UserProfileControl({
   identity,
   onChange,
+  userId,
+  onSwitchUser,
+  onCreateUser,
 }: {
   identity: UserIdentity;
   onChange: (identity: UserIdentity) => void;
+  userId?: string;
+  onSwitchUser?: () => void;
+  onCreateUser?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<"avatar" | "nickname" | null>(null);
@@ -205,6 +211,32 @@ export function UserProfileControl({
     <div className="user-profile-control" ref={controlRef}>
       {menuOpen && (
         <div className="user-profile-menu" role="menu" aria-label="用户设置">
+          {onSwitchUser && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                onSwitchUser();
+              }}
+            >
+              <span aria-hidden="true">⇄</span>
+              切换学习者
+            </button>
+          )}
+          {onCreateUser && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                onCreateUser();
+              }}
+            >
+              <span aria-hidden="true">＋</span>
+              创建新学习者
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"
@@ -233,7 +265,7 @@ export function UserProfileControl({
         <UserAvatar avatarId={identity.avatarId} className="sidebar-user-avatar" />
         <span className="user-profile-copy">
           <strong>{identity.nickname}</strong>
-          <small>本地学习者</small>
+          <small>{userId || "本地学习者"}</small>
         </span>
         <span className="user-profile-more" aria-hidden="true">•••</span>
       </button>
