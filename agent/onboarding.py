@@ -141,6 +141,214 @@ ONBOARDING_QUESTIONS: list[dict[str, Any]] = [
         "difficulty": "easy",
         "points": 1,
     },
+    {
+        "id": "onboarding_safety_001",
+        "stem": "开机前你最先应该确认哪一项？",
+        "question_type": "single_choice",
+        "options": ["直接启动主轴", "急停、护罩和润滑状态", "先把转速调到最高", "先跳过空运行"],
+        "answer": "B",
+        "capability_dimension": "safety",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.safety.precheck", "name": "开机前检查", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_safety_002",
+        "stem": "听到报警或发现异常振动时，第一步应该怎么做？",
+        "question_type": "single_choice",
+        "options": ["继续加工并观察", "立即停机并按规程处理", "先加快进给再看", "直接关闭显示屏"],
+        "answer": "B",
+        "capability_dimension": "safety",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.safety.abnormal_stop", "name": "异常停机处理", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_foundations_001",
+        "stem": "G00 通常表示什么？",
+        "question_type": "single_choice",
+        "options": ["直线插补", "快速定位", "程序结束", "主轴停止"],
+        "answer": "B",
+        "capability_dimension": "foundations",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.foundations.g00", "name": "快速定位指令", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_foundations_002",
+        "stem": "G01 通常表示什么？",
+        "question_type": "single_choice",
+        "options": ["快速定位", "直线插补", "圆弧插补", "程序结束"],
+        "answer": "B",
+        "capability_dimension": "foundations",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.foundations.g01", "name": "直线插补", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_process_planning_001",
+        "stem": "开始编写加工路线前，你通常最先要考虑什么？",
+        "question_type": "single_choice",
+        "options": ["先看机床颜色", "先估算加工时间", "先看图纸尺寸、公差和加工顺序", "先直接下刀"],
+        "answer": "C",
+        "capability_dimension": "process_planning",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.process_planning.route", "name": "工艺路线规划", "weight": 1.0}
+        ],
+        "difficulty": "medium",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_process_planning_002",
+        "stem": "选择刀具和工艺参数时，下面哪项最关键？",
+        "question_type": "single_choice",
+        "options": ["只看加工时间", "只看机床新旧", "只看操作员熟练度", "看材料、余量、精度和装夹方式"],
+        "answer": "D",
+        "capability_dimension": "process_planning",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.process_planning.parameters", "name": "装夹与余量判断", "weight": 1.0}
+        ],
+        "difficulty": "medium",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_programming_001",
+        "stem": "G90 一般表示什么？",
+        "question_type": "single_choice",
+        "options": ["圆弧插补", "绝对编程", "子程序结束", "快速退刀"],
+        "answer": "B",
+        "capability_dimension": "programming",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.programming.g90", "name": "绝对编程", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_programming_002",
+        "stem": "G91 一般表示什么？",
+        "question_type": "single_choice",
+        "options": ["主轴正转", "绝对编程", "增量编程", "取消刀补"],
+        "answer": "C",
+        "capability_dimension": "programming",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.programming.g91", "name": "增量编程", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_machining_operation_001",
+        "stem": "试运行程序时，最合适的做法是什么？",
+        "question_type": "single_choice",
+        "options": ["直接全速切削", "空运行或单段检查", "跳过首件", "先把进给调到最大"],
+        "answer": "B",
+        "capability_dimension": "machining_operation",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.operation.dry_run", "name": "空运行与单段检查", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_machining_operation_002",
+        "stem": "对刀的主要目的更接近哪一项？",
+        "question_type": "single_choice",
+        "options": ["记录时间", "增大切削深度", "建立刀具与工件坐标关系", "提高主轴噪音"],
+        "answer": "C",
+        "capability_dimension": "machining_operation",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.operation.tool_setting", "name": "对刀与坐标建立", "weight": 1.0}
+        ],
+        "difficulty": "medium",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_quality_control_001",
+        "stem": "判断尺寸是否合格时，最核心看什么？",
+        "question_type": "single_choice",
+        "options": ["加工时间", "主轴噪音", "尺寸公差和图纸要求", "操作者经验"],
+        "answer": "C",
+        "capability_dimension": "quality_control",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.quality_control.tolerance", "name": "尺寸公差判定", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_quality_control_002",
+        "stem": "测量前先做什么更稳妥？",
+        "question_type": "single_choice",
+        "options": ["直接测一次就行", "先把读数四舍五入", "先确认量具零位和清洁", "先加大夹紧力"],
+        "answer": "C",
+        "capability_dimension": "quality_control",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.quality_control.gauge", "name": "量具零位检查", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_maintenance_001",
+        "stem": "日常维护里最基本的一步是什么？",
+        "question_type": "single_choice",
+        "options": ["清洁、润滑并检查异常", "频繁重启", "把报警全关掉", "只要开机就行"],
+        "answer": "A",
+        "capability_dimension": "maintenance",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.maintenance.routine", "name": "日常维护与润滑", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_maintenance_002",
+        "stem": "设备出现异响时，最合适的处理是？",
+        "question_type": "single_choice",
+        "options": ["继续运行", "提高进给", "停机检查并报修", "把声音调小"],
+        "answer": "C",
+        "capability_dimension": "maintenance",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.maintenance.noise", "name": "异常声音与报修", "weight": 1.0}
+        ],
+        "difficulty": "easy",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_advanced_manufacturing_001",
+        "stem": "你是否接触过多轴、复合加工、CAM 或仿真这类内容？",
+        "question_type": "single_choice",
+        "options": ["完全没接触", "听过但没做过", "做过一点", "比较熟悉"],
+        "answer": "D",
+        "capability_dimension": "advanced_manufacturing",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.advanced_manufacturing.exposure", "name": "多轴与CAM基础", "weight": 1.0}
+        ],
+        "difficulty": "medium",
+        "points": 1,
+    },
+    {
+        "id": "onboarding_advanced_manufacturing_002",
+        "stem": "在智能制造相关内容里，你对远程监控、数据采集和工艺联动的熟悉度更接近哪一项？",
+        "question_type": "single_choice",
+        "options": ["基本不了解", "只听过名词", "能理解常见概念", "能结合场景做简单分析"],
+        "answer": "D",
+        "capability_dimension": "advanced_manufacturing",
+        "knowledge_points": [
+            {"id": "cnc_lathe.onboarding.advanced_manufacturing.smart", "name": "智能制造与数据联动", "weight": 1.0}
+        ],
+        "difficulty": "medium",
+        "points": 1,
+    },
 ]
 
 ONBOARDING_OPTION_SCORES: dict[str, dict[str, float]] = {
@@ -154,11 +362,38 @@ ONBOARDING_OPTION_SCORES: dict[str, dict[str, float]] = {
     "onboarding_knowledge_004": {"A": 0.0, "B": 1.0, "C": 0.33, "D": 0.0},
     "onboarding_knowledge_005": {"A": 1.0, "B": 0.33, "C": 0.0, "D": 0.0},
     "onboarding_knowledge_006": {"A": 0.0, "B": 1.0, "C": 0.33, "D": 0.0},
+    "onboarding_safety_001": {"A": 0.0, "B": 1.0, "C": 0.33, "D": 0.0},
+    "onboarding_safety_002": {"A": 0.0, "B": 1.0, "C": 0.33, "D": 0.0},
+    "onboarding_foundations_001": {"A": 0.33, "B": 1.0, "C": 0.0, "D": 0.0},
+    "onboarding_foundations_002": {"A": 0.0, "B": 1.0, "C": 0.33, "D": 0.0},
+    "onboarding_process_planning_001": {"A": 0.0, "B": 0.33, "C": 1.0, "D": 0.0},
+    "onboarding_process_planning_002": {"A": 0.0, "B": 0.0, "C": 0.33, "D": 1.0},
+    "onboarding_programming_001": {"A": 0.0, "B": 1.0, "C": 0.33, "D": 0.0},
+    "onboarding_programming_002": {"A": 0.0, "B": 0.33, "C": 1.0, "D": 0.0},
+    "onboarding_machining_operation_001": {"A": 0.0, "B": 1.0, "C": 0.33, "D": 0.0},
+    "onboarding_machining_operation_002": {"A": 0.0, "B": 0.0, "C": 1.0, "D": 0.0},
+    "onboarding_quality_control_001": {"A": 0.0, "B": 0.0, "C": 1.0, "D": 0.33},
+    "onboarding_quality_control_002": {"A": 0.0, "B": 0.0, "C": 1.0, "D": 0.0},
+    "onboarding_maintenance_001": {"A": 1.0, "B": 0.33, "C": 0.0, "D": 0.0},
+    "onboarding_maintenance_002": {"A": 0.0, "B": 0.33, "C": 1.0, "D": 0.0},
+    "onboarding_advanced_manufacturing_001": {"A": 0.0, "B": 0.33, "C": 0.67, "D": 1.0},
+    "onboarding_advanced_manufacturing_002": {"A": 0.0, "B": 0.33, "C": 0.67, "D": 1.0},
 }
 
 ONBOARDING_LEVEL_THRESHOLDS = {
     "beginner": 40,
     "standard": 80,
+}
+
+ONBOARDING_RADAR_DIMENSIONS = {
+    "safety",
+    "foundations",
+    "process_planning",
+    "programming",
+    "machining_operation",
+    "quality_control",
+    "maintenance",
+    "advanced_manufacturing",
 }
 
 _ASSESSMENT_SESSIONS: dict[str, dict[str, Any]] = {}
@@ -213,15 +448,16 @@ def score_onboarding_answers(
         if isinstance(item, dict)
     }
     scored_items = [_score_question(question, answers_by_id.get(question["id"], "")) for question in ONBOARDING_QUESTIONS]
-    total_possible = sum(float(item["possible"]) for item in scored_items) or 1.0
-    total_earned = sum(float(item["earned"]) for item in scored_items)
+    radar_items = _radar_scored_items(scored_items)
+    total_possible = sum(float(item["possible"]) for item in radar_items) or 1.0
+    total_earned = sum(float(item["earned"]) for item in radar_items)
     overall_score = round(100 * total_earned / total_possible)
     dimension_scores = _dimension_scores(scored_items)
     learner_level = _learner_level(overall_score)
     metrics = _metrics_from_dimension_scores(dimension_scores)
     scoring_policy = _scoring_policy()
-    capability_evidence = [_capability_evidence(course_id, assessment_id, item) for item in scored_items]
-    knowledge_gap_patches = [_gap_patch(course_id, item) for item in scored_items if not item["correct"]]
+    capability_evidence = [_capability_evidence(course_id, assessment_id, item) for item in radar_items]
+    knowledge_gap_patches = [_gap_patch(course_id, item) for item in radar_items if not item["correct"]]
     path_assignment = {
         "course_id": course_id,
         "learner_level": learner_level,
@@ -375,6 +611,10 @@ def _dimension_scores(scored_items: list[dict[str, Any]]) -> dict[str, float]:
         for dimension, bucket in dimensions.items()
         if bucket["possible"]
     }
+
+
+def _radar_scored_items(scored_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [item for item in scored_items if str(item.get("dimension") or "") in ONBOARDING_RADAR_DIMENSIONS]
 
 
 def _metrics_from_dimension_scores(dimension_scores: dict[str, float]) -> dict[str, float]:

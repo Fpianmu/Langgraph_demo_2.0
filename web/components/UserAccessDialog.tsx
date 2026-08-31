@@ -19,11 +19,15 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 const DIMENSION_LABELS: Record<string, string> = {
+  background: "学习背景",
   foundations: "专业基础",
   safety: "安全规范",
+  process_planning: "工艺规划",
   programming: "数控编程",
   machining_operation: "操作加工",
   quality_control: "质量检测",
+  maintenance: "设备维护",
+  advanced_manufacturing: "先进制造",
 };
 
 function generatedUserId() {
